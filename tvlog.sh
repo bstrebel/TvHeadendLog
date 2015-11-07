@@ -260,8 +260,8 @@ case "$1" in
 										#[ "$show" == "\"\"" ] && show=$(quoted "$1")
 										#[ "$episode" == "\"\"" ] && episode=$(quoted "$2")
 
-										[ "$show" == "\"\"" ] && show="${title}"
-										[ "$episode" == "\"\"" ] && episode="${subtitle}"
+										# [ "$show" == "\"\"" ] && show="${title}"
+										# [ "$episode" == "\"\"" ] && episode="${subtitle}"
 
 										[ $season -gt 0 ] && [ $number -gt 0 ] && [ "$show" != "\"\"" ] && [ "$episode" != "\"\"" ] && {
 			
@@ -389,16 +389,10 @@ case "$1" in
 				#echo "$HEADER" >$CSV
 				;;
 
-
-	-*)			# pass options to tvlog.py
-				# echo "Unknown option $1" 1>&2 && exit 1
-			    tvlog.py --tvheadend $TVHEADEND $@
-				;;
-				
-	*)			# compact listing of logfiles
+	--list)		# compact listing of logfiles
 				if [ "$1" ]
 				then
-					files=$@								
+					files=$@
 				else
 					cd "$LOG" && files=$( ls -tr *)
 				fi
@@ -408,6 +402,11 @@ case "$1" in
 				done
 				;;
 
+	*)			# pass options to tvlog.py
+				# echo "Unknown option $1" 1>&2 && exit 1
+			    tvlog.py --tvheadend "$TVHEADEND" "$@"
+				;;
+				
 esac
 
 [ "$DEBUG" ] && set +x

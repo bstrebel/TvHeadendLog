@@ -10,6 +10,7 @@ __author__ = 'bst'
 
 import sys, platform, os, json, codecs, time, re
 import argparse
+import inspect
 
 
 #from pytvdbapi import api
@@ -19,22 +20,31 @@ class LogEntry():
 
     global tvHeadend
 
-    def format(self, format):
+    @staticmethod
+    def attributes():
+        attributes = []
+        members = inspect.getmembers(LogEntry, lambda m: not(inspect.isroutine(m)))
+        for attribute in filter(lambda m: not m[0].startswith('__'), members):
+            attributes.append(attribute[0])
+        return attributes
 
-
-        new = '"%s %s %s" % (self.date, self.statusf, self.info)'
-        return {
-            'short': "%s %s-%s %s %s" % (self.date, self.begin, self.end, self.statusf, self.info),
-            'new': eval(new)
-        }[key].encode('utf-8')
-
-    def short(self): return self.format('new')
+    def format(self, fmt):
+        return eval(fmt).encode('utf-8')
 
     def __init__(self, data):
 
         self._data = data
 
 # region Property definitions
+
+    @property
+    def raw(self): return self._data
+
+    @property
+    def uuid(self): return self['uuid']
+
+    @property
+    def log(self): return os.path.join(tvHeadend.tvlog, self.uuid).replace(tvHeadend.cwd + '/', '')
 
     @property
     def start(self): return time.strftime('%Y-%m-%d %H:%M', time.localtime(self._data['start']))
@@ -103,19 +113,19 @@ class LogEntry():
         if key == 'filename':
 
             if key in self._data.keys():
-                return self._data[key]
+                return self._data[key].encode('utf-8')
             else:
                 if 'files' in self._data.keys():
                     if len(self._data['files']) > 0:
                         if key in self._data['files'][0].keys():
-                            return self._data['files'][0][key]
+                            return self._data['files'][0][key].encode('utf-8')
             return None
 
         elif key in ['title','subtitle','description']:
 
             if key in self._data.keys():
                 if 'ger' in self._data[key].keys():
-                    return self._data[key]['ger']
+                    return self._data[key]['ger'].encode('utf-8')
             return ''
 
         elif key == 'status':
@@ -166,7 +176,7 @@ class LogData():
         for file in os.listdir('.'):
             if os.path.isdir(file): continue
             uuid = file
-            with codecs.open(self._tvlog + '/' + file, mode='r', encoding='utf8') as log:
+            with codecs.open(self._tvlog + '/' + file, mode='r', encoding='utf-8') as log:
                 self._data[uuid] = json.load(log, encoding='utf-8')
                 self._data[uuid]['uuid'] = uuid
 
@@ -194,9 +204,7 @@ class LogData():
 
     def search(self, search):
 
-        #result = filter(lambda exp, self=self: LogEntry(self._data[exp]).status == 'new', self._data)
-        #return result
-        return filter(eval(search), self._data)
+        return sorted(filter(eval(search), self._data), key=lambda exp: (self._data[exp]['start']))
 
     def __init__(self):
 
@@ -218,14 +226,21 @@ class LogData():
     @property
     def raw(self): return self._data
 
-
 class TvHeadend():
 
-    def __init__(self, tvheadend, recordings):
+    def __init__(self, tvheadend, recordings, args):
 
         self._tvheadend = tvheadend
         self._recordings = recordings
         self._tvlog = tvheadend + '/dvr/log'
+        self._args = args
+        self._cwd = os.getcwd()
+        if not self._args.format:
+            self._args.format = '"%s %s %-8s %s" % (.date, .begin, .status, .info)'
+        self._format = None
+
+    @property
+    def cwd(self): return self._cwd
 
     @property
     def root(self): return self._tvheadend
@@ -236,7 +251,29 @@ class TvHeadend():
     @property
     def tvlog(self): return self._tvlog
 
-    def upcoming(self, args):
+    @property
+    def format(self): return self._format
+
+    def parse_format(self):
+
+        fmt = self._args.format
+        if '{' in fmt or '.' in fmt:
+            for property in LogEntry.attributes():
+                fmt = fmt.replace('{' + property + '}', "self['" + property + "']")
+                fmt = fmt.replace('.' + property, "self." + property)
+        else:
+            match = re.search('\W+', fmt)
+            if match:
+                dlm = match.group(0)
+                exp = "'" + dlm + "'.join(["
+                for k in fmt.split(dlm):
+                    exp = exp + 'self.' + k + ','
+                fmt = exp.rstrip(',') + "])"
+            else:
+                fmt = 'self.' + fmt
+        return fmt
+
+    def upcoming(self):
 
         sys.stderr.write("\nChecking for conflicting entries ...\n\n")
         logData = LogData()
@@ -246,9 +283,9 @@ class TvHeadend():
             counter = 0
             for k in result:
                 counter +=1
-                print logData[k].short()
+                print logData[k].format(self.format)
                 for v in result[k]:
-                    print logData[v].short()
+                    print logData[v].format(self.format)
                 if counter < len(result): print '--'
             print
             return 1
@@ -256,31 +293,51 @@ class TvHeadend():
             sys.stderr.write("... done!\n")
             return 0
 
-    def search(self, args):
+    def search(self):
 
-        search = args.search
-        search = "lambda exp, self=self: " + search.replace("{", "LogEntry(self._data[exp])['").replace("}","']")
-        search = re.sub('(\.\w+)', r'LogEntry(self._data[exp])\1', search)
+        search = self._args.search
+        for property in LogEntry.attributes():
+            search = search.replace('{' + property + '}', "LogEntry(self._data[exp])['" + property + "']")
+            search = search.replace('.' + property, "LogEntry(self._data[exp])." + property)
 
-        sys.stderr.write("Filter: {0}\n".format(search))
+        search = "lambda exp, self=self: " + search
+
+        sys.stderr.write("\nFilter:\t{0}\nFormat:\t{1}\n\n".format(search.replace("lambda exp, self=self: ",""), self.format))
 
         logData = LogData()
         logData.read()
-        for k in logData.search(search):
-            print logData[k].format(args.format)
 
-    def run(self, args):
-        if args.upcoming: self.upcoming(args)
-        if args.search: self.search(args)
+        counter = {}
+        for k in logData.search(search):
+
+            if logData[k].status not in counter.keys():
+                counter[logData[k].status] = 1
+            else:
+                counter[logData[k].status] += 1
+
+            print logData[k].format(self.format)
+
+        sys.stderr.write("\nStatistcs: ")
+        for k in counter.keys():
+            sys.stderr.write("{0}={1} ".format(k, counter[k]))
+        sys.stderr.write("\n\n")
+
+    def run(self):
+        self._format = self.parse_format()
+        if self._args.upcoming: self.upcoming()
+        if self._args.search: self.search()
 
 def main():
 
     global tvHeadend
-    header = ['start','stop','uuid','date','begin','end','duration','flags','status','channel','comment','title']
+
+    reload(sys)
+    sys.setdefaultencoding('utf-8')
 
     _home = os.path.expanduser('~')
     _tvheadend = _home + '/.hts/tvheadend'
     _recordings = os.readlink(_tvheadend + '/.recordings')
+    _cwd = os.getcwd()
 
     # command line arguments
     parser = argparse.ArgumentParser(description='TVheadend Toolbox Rev. 0.1 (c) Bernd Strebel')
@@ -305,27 +362,27 @@ def main():
     if args.recordings:
         _recordings = args.recordings
 
-    try:
-        os.chdir(_recordings)
-    except os.error:
-        sys.stderr.write("Invalid recordings directory [{0}]. Aborting ...".format(_recordings))
-        exit(1)
-
     _tvheadend = os.getenv('TVHEADEND', _tvheadend)
     if args.tvheadend:
         _recordings = args.tvheadend
 
-    try:
-        os.chdir(_tvheadend)
-    except os.error:
-        sys.stderr.write("Invalid tvheadend directory [{0}]. Aborting ...".format(_tvheadend))
-        exit(1)
+    # try:
+    #     os.chdir(_recordings)
+    # except os.error:
+    #     sys.stderr.write("Invalid recordings directory [{0}]. Aborting ...".format(_recordings))
+    #     exit(1)
 
-    if not args.format:
-        args.format = '"%s %s-%s %s %s" % (.date, .begin, .end, .statusf, .info)'
+    # try:
+    #     os.chdir(_tvheadend)
+    # except os.error:
+    #     sys.stderr.write("Invalid tvheadend directory [{0}]. Aborting ...".format(_tvheadend))
+    #     exit(1)
 
-    tvHeadend = TvHeadend(_tvheadend, _recordings)
-    tvHeadend.run(args)
+#    if not args.search:
+#        args.search = 'True'
+
+    tvHeadend = TvHeadend(_tvheadend, _recordings,args)
+    tvHeadend.run()
 
 # region __Main__
 if __name__ == '__main__':
@@ -359,5 +416,25 @@ if __name__ == '__main__':
                     # print("")
         #result = filter(lambda exp, self=self: self._data[exp]['status'] == "new", self._data)
         # expr = "{status} in ['new', 'finished']"
+
+
+        new = '"%s %s %s" % (self.date, self.statusf, self.info)'
+        return {
+            'short': "%s %s-%s %s %s" % (self.date, self.begin, self.end, self.statusf, self.info),
+            'new': eval(new)
+        }[key].encode('utf-8')
+
+        def short(self): return self.format('new')
+
+        #search = args.search
+        #search = "lambda exp, self=self: " + search.replace("{", "LogEntry(self._data[exp])['").replace("}","']")
+        #search = re.sub('(\.[^_]\w+)(?=\.)', r'LogEntry(self._data[exp])\1', search)
+
+        #search = search.replace("{", "LogEntry(self._data[exp])['").replace("}","']")
+        #search = re.sub('\^(\w+)', r'LogEntry(self._data[exp]).\1', search)
+
+        #result = filter(lambda exp, self=self: LogEntry(self._data[exp]).status == 'new', self._data)
+        #return result
+
 
 '''
