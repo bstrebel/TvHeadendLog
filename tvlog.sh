@@ -71,11 +71,7 @@ TAR="tar czf"
 
 STAMP="$(date '+%Y-%m-%d_%H%M%S')"
 
-
 case "$1" in
-
-	--upcoming)	tvlog.py --tvheadend $TVHEADEND
-				;;	
 
 	--mirror)	shift
 				cd "$RECORDINGS" || exit
@@ -96,9 +92,9 @@ case "$1" in
 	--backup)	# snapshot of recordings (filenames only), log and csv
 				[ -d "${BACKUP}/log" ] || mkdir -p "${BACKUP}/log" || exit
 				cd "$(dirname $LOG)" || exit
-				$TAR "${BACKUP}/log/log_$STAMP.tgz" log/ $(basename $CSV)
+				$TAR "${BACKUP}/log/log_$STAMP.tgz" log/
 				cd "${BACKUP}" && ln -sf "log/log_$STAMP.tgz" ./log.tgz
-				echo "Backup file [${BACKUP}/log/log_$STAMP.tgz] created."
+				echo "${BACKUP}/log/log_$STAMP.tgz"
 				;;
 
 	--ckcsv)	# check for missing recordings and video files
@@ -394,7 +390,9 @@ case "$1" in
 				;;
 
 
-	-*)			echo "Unknown option $1" 1>&2 && exit 1
+	-*)			# pass options to tvlog.py
+				# echo "Unknown option $1" 1>&2 && exit 1
+			    tvlog.py --tvheadend $TVHEADEND $@
 				;;
 				
 	*)			# compact listing of logfiles
