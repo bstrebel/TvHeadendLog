@@ -24,7 +24,7 @@ function quoted () {
 	echo "\"$(sed 's/"/\\"/g' <<<"$1")\""
 }
 
-function unquote() {
+function unquote () {
 
 	sed 's/^"//
 		 s/"$//
