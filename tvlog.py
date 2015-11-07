@@ -8,7 +8,7 @@
 __version__ = "0.9"
 __author__ = 'bst'
 
-import sys, platform, os, json, codecs, time
+import sys, platform, os, json, codecs, time, re
 import argparse
 
 
@@ -19,17 +19,20 @@ class LogEntry():
 
     global tvHeadend
 
-    def format(self, key):
+    def format(self, format):
+
+
+        new = '"%s %s %s" % (self.date, self.statusf, self.info)'
         return {
-            'short': "%s %s-%s %s %s" % (self.date, self.begin, self.end, self.status, self.info)
+            'short': "%s %s-%s %s %s" % (self.date, self.begin, self.end, self.statusf, self.info),
+            'new': eval(new)
         }[key].encode('utf-8')
 
-    def short(self): return self.format('short')
+    def short(self): return self.format('new')
 
     def __init__(self, data):
 
         self._data = data
-
 
 # region Property definitions
 
@@ -52,9 +55,10 @@ class LogEntry():
     def flags(self): return 0 if 'flags' not in self._data.keys() else self._data['flags']
 
     @property
-    def status(self):
-        value = 'unknown' if 'status' not in self._data.keys() else self._data['status']
-        return "%-8s" % (value)
+    def status(self): return 'unknown' if 'status' not in self._data.keys() else self._data['status']
+
+    @property
+    def statusf(self): return "%-8s" % (self.status)
 
     @property
     def title(self): return self['title']
@@ -62,20 +66,32 @@ class LogEntry():
     @property
     def subtitle(self): return self['subtitle']
 
-    @property
+    @property   # full pathname
     def filename(self): return self['filename']
 
     @filename.setter
     def filename(self, value): self['filename'] = value
 
-    @property
+    @property   # pathname without recordings root
+    def file(self): return self.filename.replace(tvHeadend.recordings + '/','') if self.filename else ''
+
+    @property   # filename only without any directory
     def basename(self): return os.path.basename(self.filename) if self.filename else ''
 
     @property
-    def file(self): return self.filename.replace(tvHeadend.recordings + '/','') if self.filename else ''
-
-    @property
-    def info(self): return  self.basename if self.filename else self.title + ' - ' + self.subtitle
+    def info(self):
+        result = 'n/a'
+        if self.filename:
+            result = self.basename
+        else:
+            if self.title:
+                result = self.title
+                if self.subtitle:
+                    result = result + ' - ' + self.subtitle
+            else:
+                if self.subtitle:
+                    result = self.subtitle
+        return result
 
 # endregion
 
@@ -100,8 +116,13 @@ class LogEntry():
             if key in self._data.keys():
                 if 'ger' in self._data[key].keys():
                     return self._data[key]['ger']
-            return None
+            return ''
 
+        elif key == 'status':
+            if key in self._data.keys():
+                return self._data[key]
+            else:
+                return 'unknown'
         else:
             if key not in self._data.keys():
                 return None
@@ -171,9 +192,10 @@ class LogData():
 
         return result
 
-    def search(self, expr):
+    def search(self, search):
 
-        search = "lambda exp, self=self: " + expr.replace("{", "self._data[exp]['").replace("}","']")
+        #result = filter(lambda exp, self=self: LogEntry(self._data[exp]).status == 'new', self._data)
+        #return result
         return filter(eval(search), self._data)
 
     def __init__(self):
@@ -236,11 +258,15 @@ class TvHeadend():
 
     def search(self, args):
 
-        #sys.stderr.write("Filter: {0}\n".format(expr.replace("{","data['").replace("}","']")))
+        search = args.search
+        search = "lambda exp, self=self: " + search.replace("{", "LogEntry(self._data[exp])['").replace("}","']")
+
+        sys.stderr.write("Filter: {0}\n".format(search))
+
         logData = LogData()
         logData.read()
-        for k in logData.search(args.search):
-            print logData[k].short()
+        for k in logData.search(search):
+            print logData[k].format(args.format)
 
     def run(self, args):
         if args.upcoming: self.upcoming(args)
@@ -261,6 +287,7 @@ def main():
     parser.add_argument('-r', '--recordings', type=str, help='recording directory')
     parser.add_argument('-t', '--tvheadend', type=str, help='tvheadend log directory')
     parser.add_argument('-s', '--search', type=str, help='filter expression')
+    parser.add_argument('-f', '--format', type=str, help='output format')
     parser.add_argument('-i', '--init', action='store_true', help='check recording conflicts')
     parser.add_argument('-c', '--csv', action='store_true', help='check recording conflicts')
     parser.add_argument('-u', '--upcoming', action='store_true', help='check recording conflicts')
