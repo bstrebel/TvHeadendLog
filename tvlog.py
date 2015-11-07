@@ -260,6 +260,7 @@ class TvHeadend():
 
         search = args.search
         search = "lambda exp, self=self: " + search.replace("{", "LogEntry(self._data[exp])['").replace("}","']")
+        search = re.sub('(\.\w+)', r'LogEntry(self._data[exp])\1', search)
 
         sys.stderr.write("Filter: {0}\n".format(search))
 
@@ -319,6 +320,9 @@ def main():
     except os.error:
         sys.stderr.write("Invalid tvheadend directory [{0}]. Aborting ...".format(_tvheadend))
         exit(1)
+
+    if not args.format:
+        args.format = '"%s %s-%s %s %s" % (.date, .begin, .end, .statusf, .info)'
 
     tvHeadend = TvHeadend(_tvheadend, _recordings)
     tvHeadend.run(args)
