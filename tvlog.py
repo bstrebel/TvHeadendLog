@@ -13,9 +13,9 @@ import argparse
 import inspect
 import csv
 
+from ScraperLib.Scraper import Scraper
 
-#from pytvdbapi import api
-#db = api.TVDB('4F36CC91D7116666')
+#TODO : class hierarchy refactoring: Entry -> TvHeadend, MediathekView,File
 
 class LogEntry():
 
@@ -30,12 +30,19 @@ class LogEntry():
             attributes.append(attribute[0])
         return attributes
 
+    def __init__(self, data):
+        self._data = data
+
     def out(self, fmt):
         return eval(fmt).encode('utf-8')
 
-    def __init__(self, data):
+    def tvdb(self):
 
-        self._data = data
+        update = Scraper(self.raw).checkdb('tvdb')
+
+        if update:
+            for key in update.keys():
+                self[key] = update[key]
 
     @property
     def tvHeadend(self): return LogEntry.tvHeadend
@@ -109,6 +116,7 @@ class LogEntry():
         return result
 
 # endregion
+
 
     def __getitem__(self, key):
 
@@ -319,6 +327,8 @@ class TvHeadend():
         self._filter = None
         self._data = None
 
+#region property definitions
+
     @property
     def cwd(self): return self._cwd
 
@@ -357,6 +367,31 @@ class TvHeadend():
 
     @property
     def theFormat(self): return self._theFormat
+
+#endregion
+
+    def run(self):
+
+        self._source = self._args.source.strip('"\'')
+        self._format = self.parse_output_format()
+        self._filter = self.parse_output_filter()
+
+        if self.source == 'tvlog':
+            self._theSource = self.tvlog
+            self._data = LogData(self)
+        elif self.source == 'tvcsv':
+            self._theSource = self.tvcsv
+            self._data = CsvData(self)
+        else:
+            return
+
+        if self._args.check == "conflicts":
+            self.check_conflicts()
+        elif self._args.check == "tvdb":
+            self.check_tvdb()
+        else:
+            self.list_data()
+
 
     def parse_output_filter(self):
 
@@ -459,25 +494,12 @@ class TvHeadend():
             sys.stderr.write("{0}={1} ".format(k, counter[k]))
         sys.stderr.write("\n\n")
 
-    def run(self):
 
-        self._source = self._args.source.strip('"\'')
-        self._format = self.parse_output_format()
-        self._filter = self.parse_output_filter()
+    def check_tvdb(self):
 
-        if self.source == 'tvlog':
-            self._theSource = self.tvlog
-            self._data = LogData(self)
-        elif self.source == 'tvcsv':
-            self._theSource = self.tvcsv
-            self._data = CsvData(self)
-        else:
-            return
-
-        if self._args.check == "conflicts":
-            self.check_conflicts()
-        else:
-            self.list_data()
+        self.data.read()
+        for k in self.data.filter():
+            self.data[k].tvdb()
 
 def main():
 
@@ -525,8 +547,7 @@ def main():
     if args.tvheadend:
         options['tvheadend'] = args.tvheadend
 
-    tvHeadend = TvHeadend(options, args)
-    tvHeadend.run()
+    TvHeadend(options, args).run()
 
 # region __Main__
 
