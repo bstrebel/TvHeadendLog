@@ -8,12 +8,18 @@
 __version__ = "0.9"
 __author__ = 'bst'
 
-import sys, platform, os, json, codecs, time, re
+import sys
+import os
+import json
+import codecs
+import time
+import re
 import argparse
 import inspect
 import csv
 
-from ScraperLib.Scraper import Scraper
+from Scraper import Scraper
+
 
 #TODO : class hierarchy refactoring: Entry -> TvHeadend, MediathekView,File
 
