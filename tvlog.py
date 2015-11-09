@@ -19,7 +19,8 @@ import csv
 
 class LogEntry():
 
-    global tvHeadend
+    # TvHeadend context set from class Data during initialization
+    tvHeadend = None
 
     @staticmethod
     def attributes():
@@ -36,10 +37,13 @@ class LogEntry():
 
         self._data = data
 
-# region Property definitions
+    @property
+    def tvHeadend(self): return LogEntry.tvHeadend
 
     @property
     def raw(self): return self._data
+
+# region data property definitions
 
     @property
     def uuid(self): return self['uuid']
@@ -179,17 +183,13 @@ class LogEntry():
     # @title.setter
     # def title(self, value): self._title = value
 
-
 class Data:
 
-    global tvHeadend
+    def __init__(self, tvHeadend):
 
-    def __init__(self):
-
-        self._recordings = tvHeadend.recordings
-        self._data = {}
-        self._tvlog = tvHeadend.tvlog
-        self._tvcsv = tvHeadend.tvcsv
+        LogEntry.tvHeadend = tvHeadend
+        
+        self._tvHeadend = tvHeadend
         self._data = {}
 
     def __getitem__(self, key):
@@ -202,10 +202,16 @@ class Data:
         self._data[key] = value
 
     @property
-    def tvlog(self): return self._tvlog
+    def tvHeadend(self): return self._tvHeadend
 
     @property
-    def tvcsv(self): return self._tvcsv
+    def recordings(self): return self.tvHeadend.recordings
+
+    @property
+    def tvlog(self): return self.tvHeadend.tvlog
+
+    @property
+    def tvcsv(self): return self.tvHeadend.tvcsv
 
     @property
     def raw(self): return self._data
@@ -233,20 +239,19 @@ class Data:
 
     def filter(self):
 
-        return sorted(filter(eval(tvHeadend.filter), self._data), key=lambda exp: (self._data[exp]['start']))
-
+        return sorted(filter(eval(self.tvHeadend.filter), self._data), key=lambda exp: (self._data[exp]['start']))
 
 class LogData(Data):
 
-    def __init__(self):
-        Data.__init__(self)
+    def __init__(self, tvHeadend):
+        Data.__init__(self, tvHeadend)
 
     def read(self):
         os.chdir(self.tvlog)
         for file in os.listdir('.'):
             if os.path.isdir(file): continue
             uuid = file
-            with codecs.open(self._tvlog + '/' + file, mode='r', encoding='utf-8') as log:
+            with codecs.open(self.tvlog + '/' + file, mode='r', encoding='utf-8') as log:
                 self._data[uuid] = json.load(log, encoding='utf-8')
                 self._data[uuid]['uuid'] = uuid
 
@@ -267,10 +272,8 @@ class LogData(Data):
                 merge[key] = self.raw[uuid][key]
         return merge
 
-
 class CsvData(Data):
 
-    global tvHeadend
     _csvheader = ["start", "stop", "uuid", "date", "begin", "end", "duration", "flags",
                   "status", "channelname", "comment", "title", "subtitle", "show", "episode",
                   "season", "number", "filename", "description"]
@@ -279,9 +282,9 @@ class CsvData(Data):
     def header():
         return "|".join(CsvData._csvheader)
 
-    def __init__(self):
+    def __init__(self, tvHeadend):
 
-        Data.__init__(self)
+        Data.__init__(self, tvHeadend)
 
     def read(self):
 
@@ -298,12 +301,12 @@ class CsvData(Data):
 
 class TvHeadend():
 
-    def __init__(self, tvheadend, recordings, args):
+    def __init__(self, options, args):
 
-        self._tvheadend = tvheadend
-        self._recordings = recordings
-        self._tvlog = tvheadend + '/dvr/log'
-        self._tvcsv = tvheadend + '/dvr/log.csv'
+        self._tvheadend = options['tvheadend']
+        self._recordings = options['recordings']
+        self._tvlog = options['tvheadend'] + '/dvr/log'
+        self._tvcsv = options['tvheadend'] + '/dvr/log.csv'
         self._args = args
         self._cwd = os.getcwd()
         if not self._args.out: self._args.out = '"%s %s %-8s %s" % (.date, .begin, .status, .info)'
@@ -464,10 +467,10 @@ class TvHeadend():
 
         if self.source == 'tvlog':
             self._theSource = self.tvlog
-            self._data = LogData()
+            self._data = LogData(self)
         elif self.source == 'tvcsv':
             self._theSource = self.tvcsv
-            self._data = CsvData()
+            self._data = CsvData(self)
         else:
             return
 
@@ -478,15 +481,16 @@ class TvHeadend():
 
 def main():
 
-    global tvHeadend
-
     reload(sys)
     sys.setdefaultencoding('utf-8')
 
-    _home = os.path.expanduser('~')
-    _tvheadend = _home + '/.hts/tvheadend'
-    _recordings = os.readlink(_tvheadend + '/.recordings')
-    _cwd = os.getcwd()
+    options = {
+
+        'home': os.path.expanduser('~'),
+        'tvheadend': os.path.expanduser('~') + '/.hts/tvheadend',
+        'recordings': os.readlink(os.path.expanduser('~') + '/.hts/tvheadend' + '/.recordings'),
+        'cwd': os.getcwd()
+    }
 
     # command line arguments
     parser = argparse.ArgumentParser(description='TVheadend Toolbox Rev. 0.1 (c) Bernd Strebel')
@@ -513,15 +517,15 @@ def main():
 
     args = parser.parse_args()
 
-    _recordings = os.getenv('RECORDINGS', _recordings)
+    options['recordings'] = os.getenv('RECORDINGS', options['recordings'])
     if args.recordings:
-        _recordings = args.recordings
+        options['recordings'] = args.recordings
 
-    _tvheadend = os.getenv('TVHEADEND', _tvheadend)
+    options['tvheadend'] = os.getenv('TVHEADEND', options['tvheadend'])
     if args.tvheadend:
-        _recordings = args.tvheadend
+        options['tvheadend'] = args.tvheadend
 
-    tvHeadend = TvHeadend(_tvheadend, _recordings, args)
+    tvHeadend = TvHeadend(options, args)
     tvHeadend.run()
 
 # region __Main__
