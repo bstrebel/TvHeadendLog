@@ -18,7 +18,7 @@ import argparse
 import inspect
 import csv
 
-from Scraper import Scraper
+#from Scraper import Scraper
 
 
 #TODO : class hierarchy refactoring: Entry -> TvHeadend, MediathekView,File
@@ -398,7 +398,6 @@ class TvHeadend():
         else:
             self.list_data()
 
-
     def parse_output_filter(self):
 
         filter = self._args.filter
@@ -499,7 +498,6 @@ class TvHeadend():
         for k in counter.keys():
             sys.stderr.write("{0}={1} ".format(k, counter[k]))
         sys.stderr.write("\n\n")
-
 
     def check_tvdb(self):
 
