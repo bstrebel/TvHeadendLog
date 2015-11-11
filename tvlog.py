@@ -18,8 +18,6 @@ import argparse
 import inspect
 import csv
 
-#from Scraper import Scraper
-
 
 #TODO : class hierarchy refactoring: Entry -> TvHeadend, MediathekView,File
 
@@ -44,9 +42,15 @@ class LogEntry():
 
     def tvdb(self):
 
-        update = Scraper(self.raw).checkdb('tvdb')
+        from tvscraper import GoogleScraper
 
-        if update:
+        update = {}
+
+        for key in ['title', 'subtitle', 'show', 'episode', 'season', 'number']:
+            if self.raw.has_key(key):
+                update[key] = self[key]
+
+        if GoogleScraper(update).search():
             for key in update.keys():
                 self[key] = update[key]
 
@@ -530,9 +534,9 @@ def main():
     #parser.add_argument('-i', '--init', action='store_true', help='check recording conflicts')
     #parser.add_argument('-c', '--csv', action='store_true', help='check recording conflicts')
     #parser.add_argument('-c', '--check', action='store_true', help='check recording conflicts')
-    parser.add_argument('-d', '--checkdb', action='store_true', help='check movie databases')
+    #parser.add_argument('-d', '--checkdb', action='store_true', help='check movie databases')
 
-    parser.add_argument('-c', '--check', type=str, choices=['conflicts'],
+    parser.add_argument('-c', '--check', type=str, choices=['conflicts','tvdb'],
                         help='perform checks on recording entries')
 
     parser.add_argument('--log', type=str, help='alternate logging configuration file')
