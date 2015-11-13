@@ -17,6 +17,7 @@ import re
 import argparse
 import inspect
 import csv
+import pprint
 
 
 #TODO : class hierarchy refactoring: Entry -> TvHeadend, MediathekView,File
@@ -42,7 +43,7 @@ class LogEntry():
 
     def tvdb(self):
 
-        from tvscraper import GoogleScraper
+        from tvscraper import TvScraper
 
         update = {}
 
@@ -50,7 +51,9 @@ class LogEntry():
             if self.raw.has_key(key):
                 update[key] = self[key]
 
-        if GoogleScraper(update).search():
+        if TvScraper(update).search():
+            # pprint.pprint(update)
+            print update
             for key in update.keys():
                 self[key] = update[key]
 
@@ -518,7 +521,8 @@ def main():
 
         'home': os.path.expanduser('~'),
         'tvheadend': os.path.expanduser('~') + '/.hts/tvheadend',
-        'recordings': os.readlink(os.path.expanduser('~') + '/.hts/tvheadend' + '/.recordings'),
+        # 'recordings': os.readlink(os.path.expanduser('~') + '/.hts/tvheadend' + '/.recordings'),
+        'recordings': '/storage/recordings',
         'cwd': os.getcwd()
     }
 
