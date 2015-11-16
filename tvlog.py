@@ -47,9 +47,12 @@ class LogEntry():
 
         update = {}
 
-        for key in ['title', 'subtitle', 'show', 'episode', 'season', 'number']:
+        # for key in ['title', 'subtitle', 'show', 'episode', 'season', 'number']:
+        for key in self.attributes():
             if self.raw.has_key(key):
                 update[key] = self[key]
+
+        update['type'] = 'tv'
 
         if TvScraper(update).search():
             # pprint.pprint(update)
