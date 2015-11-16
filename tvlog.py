@@ -45,21 +45,19 @@ class LogEntry():
 
         from tvscraper import TvScraper
 
-        update = {}
+        update = {'type': 'tv'}
 
         # for key in ['title', 'subtitle', 'show', 'episode', 'season', 'number']:
         for key in self.attributes():
             if self.raw.has_key(key):
                 update[key] = self[key]
 
-        update['type'] = 'tv'
-
-        if TvScraper(update).search():
-            # pprint.pprint(update)
-            print update
+        update = TvScraper(update).search()
+        print "\n\n[%s / %s]" % (self['title'], self['subtitle'])
+        print json.dumps(update, indent=4, ensure_ascii=False)
+        if update:
             for key in update.keys():
                 self[key] = update[key]
-
     @property
     def tvHeadend(self): return LogEntry.tvHeadend
 
@@ -477,7 +475,7 @@ class TvHeadend():
             sys.stderr.write("... done!\n")
             return 0
 
-    def list_data(self):
+    def list_data(self, reload=True):
 
         sys.stderr.write("\nSource:\t{0}\nFilter:\t{1}\nFormat:\t{2}\n\n". format(self.theSource, self.theFilter, self.theFormat))
 
@@ -574,6 +572,12 @@ if __name__ == '__main__':
 # endregion
 
 '''
+
+    def write(self):
+        for uuid in self._data:
+            with codecs.open(uuid + '.new', mode='w', encoding='utf-8') as new:
+                json.dump(self._data[uuid], new, indent=4, ensure_ascii=False, encoding='utf-8')
+
         reader = csv.reader(fh, dialect='tvlog')
         for line in reader:
             for attribute in line:
