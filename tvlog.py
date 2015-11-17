@@ -36,7 +36,16 @@ class LogEntry():
         return attributes
 
     def __init__(self, data):
+
         self._data = data
+
+        if not self._data.has_key('tvlog'):
+            self._data['tvlog'] = { 'type': 'tv'}
+            for key in ['uuid', 'show', 'episode', 'season', 'number', 'status', 'flags']:
+                if self._data.has_key(key):
+                    self._data['tvlog'][key] = self._data[key]
+                    del self._data[key]
+        if not self._data['tvlog'].has_key('type'): self._data['tvlog']['type'] = 'tv'
 
     def out(self, fmt):
         return eval(fmt).encode('utf-8')
@@ -53,16 +62,22 @@ class LogEntry():
                 update[key] = self[key]
 
         update = TvScraper(update).search()
-        print "\n\n[%s / %s]" % (self['title'], self['subtitle'])
-        print json.dumps(update, indent=4, ensure_ascii=False)
+
+        # print "\n\n[%s / %s]" % (self['title'], self['subtitle'])
+        # print json.dumps(update, indent=4, ensure_ascii=False)
+
         if update:
             for key in update.keys():
                 self[key] = update[key]
+
     @property
     def tvHeadend(self): return LogEntry.tvHeadend
 
     @property
     def raw(self): return self._data
+
+    @property
+    def tvlog(self): return self.raw['tvlog']
 
 # region data property definitions
 
@@ -73,25 +88,25 @@ class LogEntry():
     def log(self): return os.path.join(tvHeadend.tvlog, self.uuid).replace(tvHeadend.cwd + '/', '')
 
     @property
-    def start(self): return time.strftime('%Y-%m-%d %H:%M', time.localtime(self._data['start']))
+    def start(self): return time.strftime('%Y-%m-%d %H:%M', time.localtime(self.raw['start']))
 
     @property
-    def stop(self): return time.strftime('%Y-%m-%d %H:%M', time.localtime(self._data['stop']))
+    def stop(self): return time.strftime('%Y-%m-%d %H:%M', time.localtime(self.raw['stop']))
 
     @property
-    def date(self): return time.strftime('%Y-%m-%d', time.localtime(self._data['start']))
+    def date(self): return time.strftime('%Y-%m-%d', time.localtime(self.raw['start']))
 
     @property
-    def begin(self): return time.strftime('%H:%M', time.localtime(self._data['start']))
+    def begin(self): return time.strftime('%H:%M', time.localtime(self.raw['start']))
 
     @property
-    def end(self): return time.strftime('%H:%M', time.localtime(self._data['stop']))
+    def end(self): return time.strftime('%H:%M', time.localtime(self.raw['stop']))
 
     @property
-    def flags(self): return 0 if 'flags' not in self._data.keys() else self._data['flags']
+    def flags(self): return self['flags']
 
     @property
-    def status(self): return 'unknown' if 'status' not in self._data.keys() else self._data['status']
+    def status(self): return self['status']
 
     @property
     def statusf(self): return "%-8s" % (self.status)
@@ -131,73 +146,78 @@ class LogEntry():
 
 # endregion
 
-
     def __getitem__(self, key):
 
         if key == 'filename':
 
-            if key in self._data.keys():
-                return self._data[key].encode('utf-8')
+            if key in self.raw.keys():
+                return self.raw[key].encode('utf-8')
             else:
-                if 'files' in self._data.keys():
-                    if len(self._data['files']) > 0:
-                        if key in self._data['files'][0].keys():
-                            return self._data['files'][0][key].encode('utf-8')
+                if 'files' in self.raw.keys():
+                    if len(self.raw['files']) > 0:
+                        if key in self.raw['files'][0].keys():
+                            return self.raw['files'][0][key].encode('utf-8')
             return None
 
         elif key in ['title','subtitle','description']:
 
-            if key in self._data.keys():
-                if isinstance(self._data[key], dict):
-                    if 'ger' in self._data[key].keys():
-                        return self._data[key]['ger'].encode('utf-8')
+            if key in self.raw.keys():
+                if isinstance(self.raw[key], dict):
+                    if 'ger' in self.raw[key].keys():
+                        return self.raw[key]['ger'].encode('utf-8')
                 else:
-                    return self._data[key].encode('utf-8')
+                    return self.raw[key].encode('utf-8')
 
             return ''
 
         elif key == 'status':
-            if key not in self._data.keys(): return 'unknown'
+            if key not in self.tvlog.keys(): return 'unknown'
+            else: return self.tvlog[key]
 
-        elif key == 'duration': return (self._data['stop'] - self._data['start']) / 60
+        elif key == 'duration': return (self.raw['stop'] - self.raw['start']) / 60
 
         elif key in ['flags', 'season', 'number']:
-            if key not in self._data.keys(): return 0
-            else: return int(self._data[key])
+            if key not in self.tvlog.keys(): return 0
+            else: return int(self.tvlog[key])
 
-        elif key == 'date': return time.strftime('%Y-%m-%d', time.localtime(self._data['start']))
+        elif key == 'date': return time.strftime('%Y-%m-%d', time.localtime(self.raw['start']))
 
-        elif key == 'begin': return time.strftime('%H:%M', time.localtime(self._data['start']))
+        elif key == 'begin': return time.strftime('%H:%M', time.localtime(self.raw['start']))
 
-        elif key == 'end': return time.strftime('%H:%M', time.localtime(self._data['stop']))
+        elif key == 'end': return time.strftime('%H:%M', time.localtime(self.raw['stop']))
 
         else:
-            if key not in self._data.keys():
-                return None
+            if key in self.tvlog.keys():
+                return self.tvlog[key]
+            if key in self.raw.keys():
+                return self.raw[key]
 
-        return self._data[key]
+        return None
 
     def __setitem__(self, key, value):
 
         if key == 'filename':
 
-            if key in self._data.keys():
-                self._data[key] = value
+            if key in self.raw.keys():
+                self.raw[key] = value
             else:
-                if 'files' in self._data.keys():
-                    if len(self._data['files']) > 0:
-                        if key in self._data['files'][0].keys():
-                            self._data['files'][0][key] = value
+                if 'files' in self.raw.keys():
+                    if len(self.raw['files']) > 0:
+                        if key in self.raw['files'][0].keys():
+                            self.raw['files'][0][key] = value
 
         elif key in ['title','subtitle','description']:
 
             if isinstance(value, dict):
-                self._data[key] = value
+                self.raw[key] = value
             else:
-                self._data[key]['ger'] = value
+                self.raw[key]['ger'] = value
 
         else:
-            self._data[key] = value
+            if key in self.raw.keys():
+                self.raw[key] = value
+            else:
+                self.tvlog[key] = value
 
     # @property
     # def title(self): return self._title
@@ -275,6 +295,7 @@ class LogData(Data):
             uuid = file
             with codecs.open(self.tvlog + '/' + file, mode='r', encoding='utf-8') as log:
                 self._data[uuid] = json.load(log, encoding='utf-8')
+                log.close()
                 self._data[uuid]['uuid'] = uuid
 
     def write(self):
@@ -285,11 +306,13 @@ class LogData(Data):
             # print json.dumps(entry.raw, indent=4, ensure_ascii=False, encoding='utf-8')
             with codecs.open(uuid, mode='w', encoding='utf-8') as new:
                 json.dump(entry.raw, new, indent=4, ensure_ascii=False, encoding='utf-8')
+                new.close()
 
     def merge(self, uuid):
 
         with codecs.open(self.tvlog + '/' + uuid, mode='r', encoding='utf-8') as log:
             merge = LogEntry(json.load(log, encoding='utf-8'))
+            log.close()
             for key in self.raw[uuid].keys():
                 merge[key] = self.raw[uuid][key]
         return merge
@@ -399,10 +422,14 @@ class TvHeadend():
         else:
             return
 
+        self._data.read()
+
         if self._args.check == "conflicts":
             self.check_conflicts()
         elif self._args.check == "tvdb":
             self.check_tvdb()
+        elif self._args.update:
+            self._data.write()
         else:
             self.list_data()
 
@@ -459,7 +486,7 @@ class TvHeadend():
 
         sys.stderr.write("\nChecking for conflicting entries ...\n\n")
 
-        self.data.read()
+        # self.data.read()
         result = self.data.check_conflicts()
         if result:
             counter = 0
@@ -475,14 +502,14 @@ class TvHeadend():
             sys.stderr.write("... done!\n")
             return 0
 
-    def list_data(self, reload=True):
+    def list_data(self, reload=False):
 
         sys.stderr.write("\nSource:\t{0}\nFilter:\t{1}\nFormat:\t{2}\n\n". format(self.theSource, self.theFilter, self.theFormat))
 
         if self.theFormat == 'CSV' and not self._args.noheader:
             print CsvData.header()
 
-        self.data.read()
+        if reload: self.data.read()
 
         counter = {}
         out = []
@@ -509,7 +536,7 @@ class TvHeadend():
 
     def check_tvdb(self):
 
-        self.data.read()
+        # self.data.read()
         for k in self.data.filter():
             self.data[k].tvdb()
 
@@ -535,6 +562,7 @@ def main():
     parser.add_argument('-s', '--source', type=str, help='data source')
     parser.add_argument('-f', '--filter', type=str, help='filter expression')
     parser.add_argument('-o', '--out', type=str, help='output expression')
+    parser.add_argument('-u', '--update', action='store_true', help='update tvlog files')
     parser.add_argument('-n', '--noheader', action='store_true', help='suppress header for csv output')
     #parser.add_argument('-i', '--init', action='store_true', help='check recording conflicts')
     #parser.add_argument('-c', '--csv', action='store_true', help='check recording conflicts')
