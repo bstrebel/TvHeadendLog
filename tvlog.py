@@ -19,7 +19,6 @@ import inspect
 import csv
 import pprint
 
-
 #TODO : class hierarchy refactoring: Entry -> TvHeadend, MediathekView,File
 
 class LogEntry():
@@ -52,14 +51,13 @@ class LogEntry():
 
     def tvdb(self):
 
+        merge = ['title', 'subtitle']
         from tvscraper import TvScraper
 
-        update = {'type': 'tv'}
+        update = dict(self.tvlog)
 
-        # for key in ['title', 'subtitle', 'show', 'episode', 'season', 'number']:
-        for key in self.attributes():
-            if self.raw.has_key(key):
-                update[key] = self[key]
+        for key in merge:
+            update[key] = self[key]
 
         update = TvScraper(update).search()
 
@@ -67,8 +65,13 @@ class LogEntry():
         # print json.dumps(update, indent=4, ensure_ascii=False)
 
         if update:
-            for key in update.keys():
+
+            for key in merge:
                 self[key] = update[key]
+                del update[key]
+
+            for key in update.keys():
+                self.tvlog[key] = update[key]
 
     @property
     def tvHeadend(self): return LogEntry.tvHeadend
@@ -103,15 +106,6 @@ class LogEntry():
     def end(self): return time.strftime('%H:%M', time.localtime(self.raw['stop']))
 
     @property
-    def flags(self): return self['flags']
-
-    @property
-    def status(self): return self['status']
-
-    @property
-    def statusf(self): return "%-8s" % (self.status)
-
-    @property
     def title(self): return self['title']
 
     @property
@@ -128,6 +122,28 @@ class LogEntry():
 
     @property   # filename only without any directory
     def basename(self): return os.path.basename(self.filename) if self.filename else ''
+
+    @property
+    def show(self): return self['show']
+
+    @property
+    def episode(self): return self['episode']
+
+    @property
+    def show(self): return self['season']
+
+    @property
+    def show(self): return self['number']
+
+    @property
+    def flags(self): return self['flags']
+
+    @property
+    def status(self): return self['status']
+
+    @property
+    def statusf(self): return "%-8s" % (self.status)
+
 
     @property
     def info(self):
@@ -159,7 +175,7 @@ class LogEntry():
                             return self.raw['files'][0][key].encode('utf-8')
             return None
 
-        elif key in ['title','subtitle','description']:
+        elif key in ['title', 'subtitle', 'description']:
 
             if key in self.raw.keys():
                 if isinstance(self.raw[key], dict):
@@ -428,6 +444,7 @@ class TvHeadend():
             self.check_conflicts()
         elif self._args.check == "tvdb":
             self.check_tvdb()
+            self.list_data()
         elif self._args.update:
             self._data.write()
         else:
@@ -600,6 +617,11 @@ if __name__ == '__main__':
 # endregion
 
 '''
+
+    #for key in self.attributes():
+    #    if self.raw.has_key(key):
+    #        update[key] = self[key]
+
 
     def write(self):
         for uuid in self._data:
