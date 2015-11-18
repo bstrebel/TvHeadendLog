@@ -317,29 +317,38 @@ class LogData(Data):
     def __init__(self, tvHeadend):
         Data.__init__(self, tvHeadend)
 
-    def read(self):
-        os.chdir(self.tvlog)
-        for file in os.listdir('.'):
-            if os.path.isdir(file): continue
-            uuid = file
-            with codecs.open(self.tvlog + '/' + file, mode='r', encoding='utf-8') as log:
-                self._data[uuid] = json.load(log, encoding='utf-8')
+    def read(self, path):
+
+        if os.path.isdir(path):
+            os.chdir(path)
+            for file in os.listdir('.'):
+                if os.path.isdir(file): continue
+                uuid = file
+                with codecs.open(file, mode='r', encoding='utf-8') as log:
+                    self._data[uuid] = json.load(log, encoding='utf-8')
+                    log.close()
+                    # self._data[uuid]['uuid'] = uuid
+        else:
+            with codecs.open(path, mode='r', encoding='utf-8') as log:
+                self._data = json.load(log, encoding='utf-8')
                 log.close()
-                self._data[uuid]['uuid'] = uuid
 
-    def write(self):
+    def write(self, path):
 
-        os.chdir(self.tvlog)
-        for uuid in self.raw.keys():
-            entry = self.merge(uuid)
-            # print json.dumps(entry.raw, indent=4, ensure_ascii=False, encoding='utf-8')
-            with codecs.open(uuid, mode='w', encoding='utf-8') as new:
-                json.dump(entry.raw, new, indent=4, ensure_ascii=False, encoding='utf-8')
-                new.close()
+        if os.path.isdir:
+            os.chdir(path)
+            for uuid in self.raw.keys():
+                entry = self.merge(uuid)
+                # print json.dumps(entry.raw, indent=4, ensure_ascii=False, encoding='utf-8')
+                with codecs.open(uuid, mode='w', encoding='utf-8') as new:
+                    json.dump(entry.raw, new, indent=4, ensure_ascii=False, encoding='utf-8')
+                    new.close()
+        else:
+            pass
 
     def merge(self, uuid):
 
-        with codecs.open(self.tvlog + '/' + uuid, mode='r', encoding='utf-8') as log:
+        with codecs.open(uuid, mode='r', encoding='utf-8') as log:
             merge = LogEntry(json.load(log, encoding='utf-8'))
             log.close()
             for key in self.raw[uuid].keys():
@@ -361,11 +370,11 @@ class CsvData(Data):
 
         Data.__init__(self, tvHeadend)
 
-    def read(self):
+    def read(self, file):
 
         csv.register_dialect('tvlog', delimiter='|', quoting=csv.QUOTE_NONE)
-        csvfile = os.path.join(self.tvcsv)
-        with codecs.open(csvfile, mode='r', encoding='utf-8') as fh:
+        #csvfile = os.path.join(file)
+        with codecs.open(file, mode='r', encoding='utf-8') as fh:
             reader = csv.DictReader(fh, dialect='tvlog')
             for entry in reader:
                 uuid = entry['uuid']
@@ -468,10 +477,17 @@ class TvHeadend():
             self._theSource = self.tvcsv
             self._data = CsvData(self)
         else:
-            #TODO: process other source options
-            return
+            self._theSource = self._source
+            if os.path.isdir(self._source):
+                self._data = LogData(self)
+            else:
+                file, ext = os.path.splitext(self._source)
+                if ext == '.json':
+                    self._data = LogData(self)
+                else:
+                    self._data = CsvData(self)
 
-        self._data.read()
+        self._data.read(self._theSource)
 
         if self.check:
             if self.check in ['conflicts', 'upcoming']:
