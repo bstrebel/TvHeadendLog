@@ -18,7 +18,6 @@ import inspect
 import csv
 import logging
 import logging.config
-
 import pprint
 
 #TODO : class hierarchy refactoring: Entry -> TvHeadend, MediathekView,File
@@ -57,15 +56,17 @@ class LogEntry():
         from tvscraper import TvScraper
 
         update = dict(self.tvlog)
+        options = {'google': False,
+                   'logger': self.logger}
 
         for key in merge:
             update[key] = self[key]
 
-        print "\n\n[%s / %s]" % (self['title'], self['subtitle'])
+        self.logger.info("%s / %s" % (self['title'], self['subtitle']))
 
-        update = TvScraper(update, self.logger).search()
+        update = TvScraper(update, options).search()
 
-        print json.dumps(update, indent=4, ensure_ascii=False)
+        self.logger.debug(json.dumps(update, indent=4, ensure_ascii=False))
 
         if update:
 
@@ -81,6 +82,9 @@ class LogEntry():
 
     @property
     def logger(self): return self.tvHeadend.logger
+
+    @property
+    def google(self): return self.tvHeadend.google
 
     @property
     def raw(self): return self._data
@@ -342,6 +346,7 @@ class LogData(Data):
                 merge[key] = self.raw[uuid][key]
         return merge
 
+
 class CsvData(Data):
 
     _csvheader = ["start", "stop", "uuid", "date", "begin", "end", "duration", "flags",
@@ -399,6 +404,9 @@ class TvHeadend():
 
     @property
     def logger(self): return self.options.get('logger')
+
+    @property
+    def google(self): return self.options.get('google')
 
     @property
     def cwd(self): return self.options.get('cwd')
@@ -556,7 +564,8 @@ class TvHeadend():
         if reload: self.data.read()
 
         counter = {}
-        out = []
+        # out = []
+        out = {}
         for k in self.data.filter():
 
             if self.data[k].status not in counter.keys():
@@ -566,7 +575,9 @@ class TvHeadend():
 
             if self.theFormat == 'JSON':
                 # print self.data.merge(k).out(self.format)
-                out.append(self.data[k].raw)
+                # out.append(self.data[k].raw)
+                out[k] = self.data[k].raw
+                del out[k]['uuid']
             else:
                 print self.data[k].out(self.format)
 
@@ -585,7 +596,9 @@ class TvHeadend():
             self.data[k].tvdb()
 
 class LogFileHandler(logging.FileHandler):
+
     def __init__(self, path, mode='a', endcoding='utf-8'):
+        import logging
         path = os.path.expanduser(path)
         logging.FileHandler.__init__(self, path, mode, endcoding)
 
@@ -598,12 +611,14 @@ def main():
     sys.setdefaultencoding('utf-8')
 
     HOME = os.path.expanduser('~')
+    pp = pprint.PrettyPrinter(indent=32)
 
     options = {
 
         'home':         HOME,
         'tvheadend':    HOME + '/.hts/tvheadend',
-        'config':       HOME + '/.tvlog.cfg',
+        'config':       None,
+        'google':       False,
         'recordings':   '/storage/recordings',
         'loglevel':     'INFO',
         'out':          '"%s %s %-8s %s" % (.date, .begin, .status, .info)',
@@ -622,6 +637,7 @@ def main():
     parser.add_argument('-f', '--filter', type=str, help='filter expression')
     parser.add_argument('-o', '--out', type=str, help='output expression')
     parser.add_argument('-u', '--update', action='store_true', help='update tvlog files')
+    parser.add_argument('-g', '--google', action='store_true', help='use google cse')
     parser.add_argument('-n', '--noheader', action='store_true', help='suppress header for csv output')
 
     #parser.add_argument('-i', '--init', action='store_true', help='check recording conflicts')
@@ -645,13 +661,24 @@ def main():
     options['config'] = os.getenv('TVLOG', options['config'])
     if args.config: options['config'] = args.config
 
-    logging.config.fileConfig(options['config'])
-    logger = logging.getLogger('tvlog')
+    if not options['config']:
+        script, ext = os.path.splitext(os.path.basename(sys.argv[0]))
+        config = script + ".cfg"
+        for path in ['./', HOME + '/.', '/etc/' ]:
+            if os.path.isfile(path + config):
+                options['config'] = path + config
+                break
 
-    logger.debug("tvlog started with args: %s" % ' '.join(sys.argv[1:]))
+    if options['config'] and os.path.isfile(options['config']):
+        logging.config.fileConfig(options['config'])
+        config = ConfigParser(options)
+        config.read(os.path.expanduser(options['config']))
+    else:
+        logging.warning("Missing configuration file!")
 
-    config = ConfigParser(options)
-    config.read(os.path.expanduser(options['config']))
+    pp = pprint.PrettyPrinter(indent=32)
+    root = logging.getLogger()
+    logger = logging.getLogger('tvscraper')
 
     # precedence: defaults > config file > environment > command line
     for key in ['recordings', 'tvheadend']:
@@ -673,6 +700,9 @@ def main():
     new_level = getattr(logging, options['loglevel'].upper(), None)
     if new_level:
         logger.setLevel(new_level)
+
+    logger.debug("args: %s" % ' '.join(sys.argv[1:]))
+    logger.debug("options:\n" + pp.pformat(options))
 
     TvHeadend(options).run()
 

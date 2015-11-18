@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys, json, re, urllib, urlparse, requests
+import os, sys, logging, logging.config, json, re, urllib, urlparse, requests, pprint
 from collections import OrderedDict
 
 class IMDbScraper():
@@ -260,23 +260,31 @@ class GoogleCSE(object):
 
 class TvScraper:
 
-    def __init__(self, data=None, logger=None):
+    def __init__(self, data={}, options={}):
 
-        self._logger = logger
+        self._options = options
+        self._options.setdefault('google', False)
 
-        self._data = data if data else {}
+        self._data = data
         self._data.setdefault('scraper', {})
-
-        #if not self._data.has_key('scraper'): self._data['scraper'] = {}
 
     @property
     def data(self): return self._data
 
     @property
-    def logger(self): return self._logger
+    def options(self): return self._options
+
+    @property
+    def logger(self): return self.options['logger']
+
+    @property
+    def google(self): return self.options['google']
 
     @property
     def isTv(self): return self.data['type'] == 'tv'
+
+    @property
+    def query(self): return self.data.get('query', None)
 
     '''
     http://www.imdb.com/title/tt1172564/
@@ -324,10 +332,10 @@ class TvScraper:
 
     def search(self, **kwargs):
 
-        self._data.update(**kwargs)
+        self.data.update(**kwargs)
 
-        if self.data.has_key('query'):
-            query = self.data['query']
+        if self.query:
+            query = self.query
         else:
             query = "%s %s" % (self.data['title'], self.data['subtitle'])
 
@@ -340,17 +348,122 @@ class TvScraper:
             if BingAPI(self.data).search(query):
                 if self._check_scraper_result('BingAPI'): return self.data
 
+            if self.google:
+
+                if GoogleCSE(self.data).search(query):
+                    if self._check_scraper_result('GoogleCSE'): return self.data
+
             # if GoogleHTTP(self.data).search(query):
             #    if self._check_scraper_result('GoogleHTTP'): return self.data
 
-            # if GoogleCSE(self.data).search(query):
-            #    if self._check_scraper_result('GoogleCSE'): return self.data
-
         return self.data
 
-# region __main__
+class LogFileHandler(logging.FileHandler):
+
+    def __init__(self, path, mode='a', endcoding='utf-8'):
+        path = os.path.expanduser(path)
+        logging.FileHandler.__init__(self, path, mode, endcoding)
 
 def main():
+
+    from ConfigParser import ConfigParser
+    from argparse import ArgumentParser
+
+    reload(sys)
+    sys.setdefaultencoding('utf-8')
+
+    HOME = os.path.expanduser('~')
+    CWD = os.getcwd()
+
+    options = {
+
+        'home':         HOME,
+        'config':       None,
+        'loglevel':     'INFO',
+        'type':         'tv',
+        'cwd':          CWD
+    }
+
+    # command line arguments
+    parser = ArgumentParser(description='TVheadend Toolbox Rev. 0.1 (c) Bernd Strebel')
+    parser.add_argument('-c', '--config', type=str, help='alternate configuration file')
+    parser.add_argument('-b', '--scraper', type=str, help='alternate configuration file')
+    parser.add_argument('-q', '--query', type=str, help='episode/movie title')
+    parser.add_argument('-g', '--google', action='store_true', help='use google cse')
+    parser.add_argument('-v', '--verbose', action='count', help='increasy verbosity')
+
+    parser.add_argument('-t', '--type', type=str,
+                        choices=['TV','Tv','tv', 'MOVIE','Movie','movie'],
+                        help='search for tv show ore movie')
+
+    parser.add_argument('-l', '--loglevel', type=str,
+                        choices=['DEBUG', 'INFO', 'WARN', 'WARNING', 'ERROR', 'CRITICAL',
+                                 'debug', 'info', 'warn', 'warning', 'error', 'critical'],
+                        help='debug log level')
+
+    args = parser.parse_args()
+    opts = vars(args)
+
+    # use alternate configuration file
+    options['config'] = os.getenv('TVSCRAPER', options['config'])
+    if args.config:
+        options['config'] = args.config
+
+    if not options['config']:
+        script, ext = os.path.splitext(os.path.basename(sys.argv[0]))
+        config = script + ".cfg"
+        for path in ['./', HOME + '/.', '/etc/' ]:
+            if os.path.isfile(path + config):
+                options['config'] = path + config
+                break
+
+    if options['config'] and os.path.isfile(options['config']):
+        logging.config.fileConfig(options['config'])
+        config = ConfigParser(options)
+        config.read(os.path.expanduser(options['config']))
+    else:
+        logging.warning("Missing configuration file!")
+
+    pp = pprint.PrettyPrinter(indent=32)
+    root = logging.getLogger()
+    logger = logging.getLogger('tvscraper')
+
+    # precedence: defaults > config file > environment > command line
+
+    for key in opts.keys():
+        if options.has_key(key) and opts[key] is not None:
+            options[key] = opts[key]
+        else:
+            options.setdefault(key, opts[key])
+
+    options['type'] = options['type'].lower()
+    options['logger'] = logger
+
+    new_level = getattr(logging, options['loglevel'].upper(), None)
+    if new_level:
+        root.setLevel(new_level)
+        logger.setLevel(new_level)
+
+    logger.debug("args: %s" % ' '.join(sys.argv[1:]))
+    logger.debug("options:\n" + pp.pformat(options))
+
+    if not options['query']:
+        logger.critical("No query specified. Aborting ...")
+        exit(1)
+
+    data = {'type': options['type'],
+            'query': options['query']}
+
+    result = TvScraper(data, options).search()
+
+    print json.dumps(result, indent=4, ensure_ascii=False, encoding='utf-8')
+
+if __name__ == '__main__': main()
+
+
+'''
+
+def _main():
 
     data = [
         {
@@ -377,10 +490,6 @@ if __name__ == '__main__':
     reload(sys)
     sys.setdefaultencoding('utf-8')
     main()
-
-# endregion
-
-'''
 
         self._config = {
 
