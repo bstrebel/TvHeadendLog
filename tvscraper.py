@@ -260,13 +260,20 @@ class GoogleCSE(object):
 
 class TvScraper:
 
-    def __init__(self, data=None):
+    def __init__(self, data=None, logger=None):
+
+        self._logger = logger
 
         self._data = data if data else {}
-        if not self._data.has_key('scraper'): self._data['scraper'] = {}
+        self._data.setdefault('scraper', {})
+
+        #if not self._data.has_key('scraper'): self._data['scraper'] = {}
 
     @property
     def data(self): return self._data
+
+    @property
+    def logger(self): return self._logger
 
     @property
     def isTv(self): return self.data['type'] == 'tv'

@@ -63,7 +63,7 @@ class LogEntry():
 
         print "\n\n[%s / %s]" % (self['title'], self['subtitle'])
 
-        update = TvScraper(update).search()
+        update = TvScraper(update, self.logger).search()
 
         print json.dumps(update, indent=4, ensure_ascii=False)
 
@@ -647,9 +647,8 @@ def main():
 
     logging.config.fileConfig(options['config'])
     logger = logging.getLogger('tvlog')
-    options['logger'] = logger
 
-    logger.info("args: %s" % ' '.join(sys.argv[1:]))
+    logger.debug("tvlog started with args: %s" % ' '.join(sys.argv[1:]))
 
     config = ConfigParser(options)
     config.read(os.path.expanduser(options['config']))
@@ -669,6 +668,11 @@ def main():
     options['tvlog'] = options['tvheadend'] + '/dvr/log'
     options['tvcsv'] = options['tvheadend'] + '/dvr/log.csv'
 
+    options['logger'] = logger
+
+    new_level = getattr(logging, options['loglevel'].upper(), None)
+    if new_level:
+        logger.setLevel(new_level)
 
     TvHeadend(options).run()
 
