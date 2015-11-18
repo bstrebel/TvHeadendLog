@@ -14,9 +14,11 @@ import json
 import codecs
 import time
 import re
-import argparse
 import inspect
 import csv
+import logging
+import logging.config
+
 import pprint
 
 #TODO : class hierarchy refactoring: Entry -> TvHeadend, MediathekView,File
@@ -59,10 +61,11 @@ class LogEntry():
         for key in merge:
             update[key] = self[key]
 
+        print "\n\n[%s / %s]" % (self['title'], self['subtitle'])
+
         update = TvScraper(update).search()
 
-        # print "\n\n[%s / %s]" % (self['title'], self['subtitle'])
-        # print json.dumps(update, indent=4, ensure_ascii=False)
+        print json.dumps(update, indent=4, ensure_ascii=False)
 
         if update:
 
@@ -362,40 +365,58 @@ class CsvData(Data):
 
 class TvHeadend():
 
-    def __init__(self, options, args):
+    def __init__(self, options):
 
-        self._tvheadend = options['tvheadend']
-        self._recordings = options['recordings']
-        self._tvlog = options['tvheadend'] + '/dvr/log'
-        self._tvcsv = options['tvheadend'] + '/dvr/log.csv'
-        self._args = args
-        self._cwd = os.getcwd()
-        if not self._args.out: self._args.out = '"%s %s %-8s %s" % (.date, .begin, .status, .info)'
-        if not self._args.filter: self._args.filter = "True"
-        if not self._args.source: self._args.source = 'tvlog'
-        self._source = None
-        self._theSource = None
-        self._format = None
-        self._theFormat = None
-        self._filter = None
         self._data = None
+        self._options = options
+
+        # transformed eval strings
+        self._source = None
+        self._filter = None
+        self._format = None
+
+        # formatted ouput strings
+        self._theSource = None
+        self._theFilter = None
+        self._theFormat = None
 
 #region property definitions
 
     @property
-    def cwd(self): return self._cwd
+    def data(self): return self._data
+
+    @data.setter
+    def data(self, value): self._data = value
 
     @property
-    def root(self): return self._tvheadend
+    def options(self): return self._options
 
     @property
-    def recordings(self): return self._recordings
+    def cwd(self): return self.options.get('cwd')
 
     @property
-    def tvlog(self): return self._tvlog
+    def root(self): return self.options.get('tvheadend')
 
     @property
-    def tvcsv(self): return self._tvcsv
+    def tvheadend(self): return self.options.get('tvheadend')
+
+    @property
+    def recordings(self): return self.options.get('recordings')
+
+    @property
+    def tvlog(self): return self.options.get('tvlog')
+
+    @property
+    def tvcsv(self): return self.options.get('tvcsv')
+
+    @property
+    def out(self): return self.options.get('out')
+
+    @property
+    def check(self): return self.options.get('check')
+
+    @property
+    def update(self): return self.options.get('update')
 
     @property
     def format(self): return self._format
@@ -405,12 +426,6 @@ class TvHeadend():
 
     @property
     def source(self): return self._source
-
-    @property
-    def data(self): return self._data
-
-    @data.setter
-    def data(self, value): self._data = value
 
     @property
     def theSource(self): return self._theSource
@@ -425,7 +440,7 @@ class TvHeadend():
 
     def run(self):
 
-        self._source = self._args.source.strip('"\'')
+        self._source = self.options['source'].strip('"\'')
         self._format = self.parse_output_format()
         self._filter = self.parse_output_filter()
 
@@ -436,23 +451,26 @@ class TvHeadend():
             self._theSource = self.tvcsv
             self._data = CsvData(self)
         else:
+            #TODO: process other source options
             return
 
         self._data.read()
 
-        if self._args.check == "conflicts":
-            self.check_conflicts()
-        elif self._args.check == "tvdb":
-            self.check_tvdb()
-            self.list_data()
-        elif self._args.update:
+        if self.check:
+            if self.check in ['conflicts', 'upcoming']:
+                self.check_conflicts()
+                return
+            elif self.check == 'tvdb':
+                self.check_tvdb()
+
+        if self.update:
             self._data.write()
-        else:
-            self.list_data()
+
+        self.list_data()
 
     def parse_output_filter(self):
 
-        filter = self._args.filter
+        filter = self.options['filter']
         if filter.strip('"\'') == 'None':
             self._theFilter = "None"
             filter = 'True'
@@ -469,7 +487,7 @@ class TvHeadend():
 
     def parse_output_format(self):
 
-        fmt = self._args.out
+        fmt = self.options['out']
         if fmt.strip('"\'') == 'csv':
             self._theFormat = "CSV"
             fmt = '"%d|%d|%s|%s|%s|%s|%d|%d|%s|%s|%s|%s|%s|%s|%s|%d|%d|%s|%s" % (' \
@@ -559,20 +577,30 @@ class TvHeadend():
 
 def main():
 
+    from ConfigParser import ConfigParser
+    from argparse import ArgumentParser
+
     reload(sys)
     sys.setdefaultencoding('utf-8')
 
+    HOME = os.path.expanduser('~')
+
     options = {
 
-        'home': os.path.expanduser('~'),
-        'tvheadend': os.path.expanduser('~') + '/.hts/tvheadend',
-        # 'recordings': os.readlink(os.path.expanduser('~') + '/.hts/tvheadend' + '/.recordings'),
-        'recordings': '/storage/recordings',
+        'home':         HOME,
+        'tvheadend':    HOME + '/.hts/tvheadend',
+        'config':       HOME + '/.tvlog.cfg',
+        'recordings':   '/storage/recordings',
+        'loglevel':     'INFO',
+        'out':          '"%s %s %-8s %s" % (.date, .begin, .status, .info)',
+        'filter':       'True',
+        'source':       'tvlog',
         'cwd': os.getcwd()
     }
 
     # command line arguments
-    parser = argparse.ArgumentParser(description='TVheadend Toolbox Rev. 0.1 (c) Bernd Strebel')
+    parser = ArgumentParser(description='TVheadend Toolbox Rev. 0.1 (c) Bernd Strebel')
+    parser.add_argument('-c', '--config', type=str, help='alternate configuration file')
     parser.add_argument('-v', '--verbose', action='count', help='increasy verbosity')
     parser.add_argument('-r', '--recordings', type=str, help='recording directory')
     parser.add_argument('-t', '--tvheadend', type=str, help='tvheadend log directory')
@@ -581,37 +609,54 @@ def main():
     parser.add_argument('-o', '--out', type=str, help='output expression')
     parser.add_argument('-u', '--update', action='store_true', help='update tvlog files')
     parser.add_argument('-n', '--noheader', action='store_true', help='suppress header for csv output')
+
     #parser.add_argument('-i', '--init', action='store_true', help='check recording conflicts')
     #parser.add_argument('-c', '--csv', action='store_true', help='check recording conflicts')
     #parser.add_argument('-c', '--check', action='store_true', help='check recording conflicts')
     #parser.add_argument('-d', '--checkdb', action='store_true', help='check movie databases')
+    #parser.add_argument('--log', type=str, help='alternate logging configuration file')
 
-    parser.add_argument('-c', '--check', type=str, choices=['conflicts','tvdb'],
+    parser.add_argument('--check', type=str, choices=['conflicts','tvdb','upcoming'],
                         help='perform checks on recording entries')
 
-    parser.add_argument('--log', type=str, help='alternate logging configuration file')
     parser.add_argument('-l', '--loglevel', type=str,
                         choices=['DEBUG', 'INFO', 'WARN', 'WARNING', 'ERROR', 'CRITICAL',
                                  'debug', 'info', 'warn', 'warning', 'error', 'critical'],
                         help='debug log level')
 
     args = parser.parse_args()
+    opts = vars(args)
 
-    options['recordings'] = os.getenv('RECORDINGS', options['recordings'])
-    if args.recordings:
-        options['recordings'] = args.recordings
+    # use alternate configuration file
+    options['config'] = os.getenv('TVLOG', options['config'])
+    if args.config: options['config'] = args.config
 
-    options['tvheadend'] = os.getenv('TVHEADEND', options['tvheadend'])
-    if args.tvheadend:
-        options['tvheadend'] = args.tvheadend
+    config = ConfigParser(options)
+    config.read(os.path.expanduser(options['config']))
 
-    TvHeadend(options, args).run()
+    # precedence: defaults > config file > environment > command line
+    for key in ['recordings', 'tvheadend']:
+        options[key] = config.get('tvlog', key)
+        options[key] = os.getenv(key.upper(), options[key])
+
+    for key in opts.keys():
+        if options.has_key(key) and opts[key] is not None:
+            options[key] = opts[key]
+        else:
+            options.setdefault(key, opts[key])
+
+    options['tvheadend'] = os.path.expanduser(options['tvheadend'])
+    options['tvlog'] = options['tvheadend'] + '/dvr/log'
+    options['tvcsv'] = options['tvheadend'] + '/dvr/log.csv'
+
+    TvHeadend(options).run()
 
 # region __Main__
 
 if __name__ == '__main__':
 
     tvHeadend = None
+
     main()
     
 # endregion
