@@ -593,7 +593,6 @@ class TvHeadend():
                 # print self.data.merge(k).out(self.format)
                 # out.append(self.data[k].raw)
                 out[k] = self.data[k].raw
-                del out[k]['uuid']
             else:
                 print self.data[k].out(self.format)
 
