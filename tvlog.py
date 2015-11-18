@@ -80,6 +80,9 @@ class LogEntry():
     def tvHeadend(self): return LogEntry.tvHeadend
 
     @property
+    def logger(self): return self.tvHeadend.logger
+
+    @property
     def raw(self): return self._data
 
     @property
@@ -266,6 +269,9 @@ class Data:
     def tvHeadend(self): return self._tvHeadend
 
     @property
+    def logger(self): return self.tvHeadend.logger
+
+    @property
     def recordings(self): return self.tvHeadend.recordings
 
     @property
@@ -390,6 +396,9 @@ class TvHeadend():
 
     @property
     def options(self): return self._options
+
+    @property
+    def logger(self): return self.options.get('logger')
 
     @property
     def cwd(self): return self.options.get('cwd')
@@ -575,6 +584,11 @@ class TvHeadend():
         for k in self.data.filter():
             self.data[k].tvdb()
 
+class LogFileHandler(logging.FileHandler):
+    def __init__(self, path, mode='a', endcoding='utf-8'):
+        path = os.path.expanduser(path)
+        logging.FileHandler.__init__(self, path, mode, endcoding)
+
 def main():
 
     from ConfigParser import ConfigParser
@@ -631,6 +645,12 @@ def main():
     options['config'] = os.getenv('TVLOG', options['config'])
     if args.config: options['config'] = args.config
 
+    logging.config.fileConfig(options['config'])
+    logger = logging.getLogger('tvlog')
+    options['logger'] = logger
+
+    logger.info("args: %s" % ' '.join(sys.argv[1:]))
+
     config = ConfigParser(options)
     config.read(os.path.expanduser(options['config']))
 
@@ -649,6 +669,7 @@ def main():
     options['tvlog'] = options['tvheadend'] + '/dvr/log'
     options['tvcsv'] = options['tvheadend'] + '/dvr/log.csv'
 
+
     TvHeadend(options).run()
 
 # region __Main__
@@ -656,9 +677,9 @@ def main():
 if __name__ == '__main__':
 
     tvHeadend = None
-
     main()
-    
+    exit(0)
+
 # endregion
 
 '''
@@ -735,6 +756,5 @@ if __name__ == '__main__':
 
         #result = filter(lambda exp, self=self: LogEntry(self._data[exp]).status == 'new', self._data)
         #return result
-
 
 '''
