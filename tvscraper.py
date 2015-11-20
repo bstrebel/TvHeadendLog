@@ -45,7 +45,7 @@ class IMDbScraper():
                     pass
                 return True
             else:
-                print("Invalid imdb_tt [%s]" % (self.data['imdb_tt']))
+                print("Invalid imdb_tt [{}]".format(self.data['imdb_tt']))
                 return False
         else:
             if 'episode' in self.data:
@@ -240,7 +240,7 @@ class GoogleCSE(object):
         scraper = {'query': query, 'url': url, 'result': []}; found = 0
 
         response = requests.get(url)
-        scraper['response'] = "%s [%s]" % (response.status_code, response.text)
+        scraper['response'] = "{} [{}]".format(response.status_code, response.text)
 
         if response:
             scraper['response'] = response.status_code
@@ -340,7 +340,7 @@ class TvScraper:
         if self.query:
             query = self.query
         else:
-            query = "%s %s" % (self.data['title'], self.data['subtitle'])
+            query = "{} {}" .format(self.data['title'], self.data['subtitle'])
 
         if self.isTv:
 

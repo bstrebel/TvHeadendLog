@@ -4,24 +4,14 @@
 """
     filter tv shows and episodes at TheTVDB
 """
+
+__version__ = "1.0"
+__author__ = 'b.strebel@ebs-foto.de'
+
 from __future__ import absolute_import
 from __future__ import print_function
+import sys, os, json, codecs, time, re, inspect, csv, logging, logging.config, pprint
 # from six.moves import filter
-
-__version__ = "0.9"
-__author__ = 'bst'
-
-import sys
-import os
-import json
-import codecs
-import time
-import re
-import inspect
-import csv
-import logging
-import logging.config
-import pprint
 
 #TODO : class hierarchy refactoring: Entry -> TvHeadend, MediathekView,File
 
@@ -65,7 +55,7 @@ class LogEntry():
         for key in merge:
             update[key] = self[key]
 
-        self.logger.info("%s / %s" % (self['title'], self['subtitle']))
+        self.logger.info("{} / {}".format(self['title'], self['subtitle']))
 
         update = TvScraper(update, options).search()
 
@@ -155,7 +145,7 @@ class LogEntry():
     def status(self): return self['status']
 
     @property
-    def statusf(self): return "%-8s" % (self.status)
+    def statusf(self): return "{:8}".format(self.status)
 
 
     @property
@@ -526,7 +516,7 @@ class TvHeadend():
         fmt = self.options['out']
         if fmt.strip('"\'') == 'csv':
             self._theFormat = "CSV"
-            fmt = '"%d|%d|%s|%s|%s|%s|%d|%d|%s|%s|%s|%s|%s|%s|%s|%d|%d|%s|%s" % (' \
+            fmt = '"{:d}|{:d}|{}|{}|{}|{}|{:d}|{:d}|{}|{}|{}|{}|{}|{}|{}|{:d}|{:d}|{}|{}".format(' \
                   'self["start"], self["stop"], self["uuid"], self["date"], self["begin"], self["end"], self["duration"], self["flags"], ' \
                   'self["status"], self["channelname"], self["comment"], self["title"], self["subtitle"], self["show"], self["episode"], ' \
                   'self["season"], self["number"], self["filename"], self["description"])'
@@ -582,9 +572,7 @@ class TvHeadend():
 
         if reload: self.data.read()
 
-        counter = {}
-        # out = []
-        out = {}
+        counter = {} ; out = {}
         for k in self.data.filter():
 
             if self.data[k].status not in counter:
@@ -613,6 +601,7 @@ class TvHeadend():
         for k in self.data.filter():
             self.data[k].tvdb()
 
+
 class LogFileHandler(logging.FileHandler):
 
     def __init__(self, path, mode='a', endcoding='utf-8'):
@@ -640,7 +629,7 @@ def main():
         'google':       False,
         'recordings':   '/storage/recordings',
         'loglevel':     'INFO',
-        'out':          '"%s %s %-8s %s" % (.date, .begin, .status, .info)',
+        'out':          '"{} {} {:8} {}".format(.date, .begin, .status, .info)',
         'filter':       'True',
         'source':       'tvlog',
         'cwd': os.getcwd()
@@ -720,7 +709,7 @@ def main():
     if new_level:
         logger.setLevel(new_level)
 
-    logger.debug("args: %s" % ' '.join(sys.argv[1:]))
+    logger.debug("args: {}".format(' '.join(sys.argv[1:])))
     logger.debug("options:\n" + pp.pformat(options))
 
     TvHeadend(options).run()
