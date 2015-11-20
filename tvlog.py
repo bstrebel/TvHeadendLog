@@ -4,6 +4,9 @@
 """
     filter tv shows and episodes at TheTVDB
 """
+from __future__ import absolute_import
+from __future__ import print_function
+# from six.moves import filter
 
 __version__ = "0.9"
 __author__ = 'bst'
@@ -31,7 +34,7 @@ class LogEntry():
     def attributes():
         attributes = []
         members = inspect.getmembers(LogEntry, lambda m: not(inspect.isroutine(m)))
-        for attribute in filter(lambda m: not m[0].startswith('__'), members):
+        for attribute in [m for m in members if not m[0].startswith('__')]:
             attributes.append(attribute[0])
         return attributes
 
@@ -39,13 +42,13 @@ class LogEntry():
 
         self._data = data
 
-        if not self._data.has_key('tvlog'):
+        if 'tvlog' not in self._data:
             self._data['tvlog'] = { 'type': 'tv'}
             for key in ['uuid', 'show', 'episode', 'season', 'number', 'status', 'flags']:
-                if self._data.has_key(key):
+                if key in self._data:
                     self._data['tvlog'][key] = self._data[key]
                     del self._data[key]
-        if not self._data['tvlog'].has_key('type'): self._data['tvlog']['type'] = 'tv'
+        if 'type' not in self._data['tvlog']: self._data['tvlog']['type'] = 'tv'
 
     def out(self, fmt):
         return eval(fmt).encode('utf-8')
@@ -74,7 +77,7 @@ class LogEntry():
                 self[key] = update[key]
                 del update[key]
 
-            for key in update.keys():
+            for key in list(update.keys()):
                 self.tvlog[key] = update[key]
 
     @property
@@ -176,20 +179,20 @@ class LogEntry():
 
         if key == 'filename':
 
-            if key in self.raw.keys():
+            if key in self.raw:
                 return self.raw[key].encode('utf-8')
             else:
-                if 'files' in self.raw.keys():
+                if 'files' in self.raw:
                     if len(self.raw['files']) > 0:
-                        if key in self.raw['files'][0].keys():
+                        if key in self.raw['files'][0]:
                             return self.raw['files'][0][key].encode('utf-8')
             return None
 
         elif key in ['title', 'subtitle', 'description']:
 
-            if key in self.raw.keys():
+            if key in self.raw:
                 if isinstance(self.raw[key], dict):
-                    if 'ger' in self.raw[key].keys():
+                    if 'ger' in self.raw[key]:
                         return self.raw[key]['ger'].encode('utf-8')
                 else:
                     return self.raw[key].encode('utf-8')
@@ -197,13 +200,13 @@ class LogEntry():
             return ''
 
         elif key == 'status':
-            if key not in self.tvlog.keys(): return 'unknown'
+            if key not in self.tvlog: return 'unknown'
             else: return self.tvlog[key]
 
         elif key == 'duration': return (self.raw['stop'] - self.raw['start']) / 60
 
         elif key in ['flags', 'season', 'number']:
-            if key not in self.tvlog.keys(): return 0
+            if key not in self.tvlog: return 0
             else: return int(self.tvlog[key])
 
         elif key == 'date': return time.strftime('%Y-%m-%d', time.localtime(self.raw['start']))
@@ -213,9 +216,9 @@ class LogEntry():
         elif key == 'end': return time.strftime('%H:%M', time.localtime(self.raw['stop']))
 
         else:
-            if key in self.tvlog.keys():
+            if key in self.tvlog:
                 return self.tvlog[key]
-            if key in self.raw.keys():
+            if key in self.raw:
                 return self.raw[key]
 
         return None
@@ -224,12 +227,12 @@ class LogEntry():
 
         if key == 'filename':
 
-            if key in self.raw.keys():
+            if key in self.raw:
                 self.raw[key] = value
             else:
-                if 'files' in self.raw.keys():
+                if 'files' in self.raw:
                     if len(self.raw['files']) > 0:
-                        if key in self.raw['files'][0].keys():
+                        if key in self.raw['files'][0]:
                             self.raw['files'][0][key] = value
 
         elif key in ['title','subtitle','description']:
@@ -240,7 +243,7 @@ class LogEntry():
                 self.raw[key]['ger'] = value
 
         else:
-            if key in self.raw.keys():
+            if key in self.raw:
                 self.raw[key] = value
             else:
                 self.tvlog[key] = value
@@ -261,7 +264,7 @@ class Data:
         self._data = {}
 
     def __getitem__(self, key):
-        if key in self._data.keys():
+        if key in self._data:
             return LogEntry(self._data[key]);
 
         return None
@@ -301,7 +304,7 @@ class Data:
             index = current + 1
             while index < dl:
                 if self._data[sd[index]]['start'] < self._data[entry]['stop']:
-                    if entry not in result.keys(): result[entry] = []
+                    if entry not in result: result[entry] = []
                     result[entry].append(sd[index])
                 index += 1
             current += 1
@@ -337,7 +340,7 @@ class LogData(Data):
 
         if os.path.isdir:
             os.chdir(path)
-            for uuid in self.raw.keys():
+            for uuid in self.raw:
                 entry = self.merge(uuid)
                 # print json.dumps(entry.raw, indent=4, ensure_ascii=False, encoding='utf-8')
                 with codecs.open(uuid, mode='w', encoding='utf-8') as new:
@@ -351,7 +354,7 @@ class LogData(Data):
         with codecs.open(uuid, mode='r', encoding='utf-8') as log:
             merge = LogEntry(json.load(log, encoding='utf-8'))
             log.close()
-            for key in self.raw[uuid].keys():
+            for key in self.raw[uuid]:
                 merge[key] = self.raw[uuid][key]
         return merge
 
@@ -560,11 +563,11 @@ class TvHeadend():
             counter = 0
             for k in result:
                 counter +=1
-                print self.data[k].out(self.format)
+                print(self.data[k].out(self.format))
                 for v in result[k]:
-                    print self.data[v].out(self.format)
-                if counter < len(result): print '--'
-            print
+                    print(self.data[v].out(self.format))
+                if counter < len(result): print('--')
+            print()
             return 1
         else:
             sys.stderr.write("... done!\n")
@@ -575,7 +578,7 @@ class TvHeadend():
         sys.stderr.write("\nSource:\t{0}\nFilter:\t{1}\nFormat:\t{2}\n\n". format(self.theSource, self.theFilter, self.theFormat))
 
         if self.theFormat == 'CSV' and not self._args.noheader:
-            print CsvData.header()
+            print(CsvData.header())
 
         if reload: self.data.read()
 
@@ -584,7 +587,7 @@ class TvHeadend():
         out = {}
         for k in self.data.filter():
 
-            if self.data[k].status not in counter.keys():
+            if self.data[k].status not in counter:
                 counter[self.data[k].status] = 1
             else:
                 counter[self.data[k].status] += 1
@@ -594,13 +597,13 @@ class TvHeadend():
                 # out.append(self.data[k].raw)
                 out[k] = self.data[k].raw
             else:
-                print self.data[k].out(self.format)
+                print(self.data[k].out(self.format))
 
         if self.theFormat == 'JSON':
-            print json.dumps(out, indent=4, ensure_ascii=False, encoding='utf-8')
+            print(json.dumps(out, indent=4, ensure_ascii=False, encoding='utf-8'))
 
         sys.stderr.write("\nStatistcs: ")
-        for k in counter.keys():
+        for k in counter:
             sys.stderr.write("{0}={1} ".format(k, counter[k]))
         sys.stderr.write("\n\n")
 
@@ -619,6 +622,7 @@ class LogFileHandler(logging.FileHandler):
 
 def main():
 
+    # from six.moves.configparser import ConfigParser
     from ConfigParser import ConfigParser
     from argparse import ArgumentParser
 
@@ -700,8 +704,8 @@ def main():
         options[key] = config.get('tvlog', key)
         options[key] = os.getenv(key.upper(), options[key])
 
-    for key in opts.keys():
-        if options.has_key(key) and opts[key] is not None:
+    for key in opts:
+        if key in options and opts[key] is not None:
             options[key] = opts[key]
         else:
             options.setdefault(key, opts[key])

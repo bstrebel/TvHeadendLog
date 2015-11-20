@@ -1,8 +1,11 @@
+from __future__ import absolute_import
+from __future__ import print_function
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import os, sys, logging, logging.config, json, re, urllib, urlparse, requests, pprint
 from collections import OrderedDict
+
 
 class IMDbScraper():
 
@@ -23,7 +26,7 @@ class IMDbScraper():
 
         self.data.update(**kwargs)
 
-        if self.data.has_key('imdb_tt'):
+        if 'imdb_tt' in self.data:
             movie = self._imdb.get_movie(self.data['imdb_tt'])
             if movie:
                 # load movie attributes
@@ -42,12 +45,12 @@ class IMDbScraper():
                     pass
                 return True
             else:
-                print "Invalid imdb_tt [%s]" % (self.data['imdb_tt'])
+                print("Invalid imdb_tt [%s]" % (self.data['imdb_tt']))
                 return False
         else:
-            if self.data.has_key('episode'):
+            if 'episode' in self.data:
                 result = self._imdb.search_episode(self.data['episode'])
-            elif self.data.has_key('query'):
+            elif 'query' in self.data:
                 result = self._imdb.search_movie(kwargs['query'])
 
             if result:
@@ -84,19 +87,19 @@ class TvDbScraper():
     def data(self): return self._data
 
     @property
-    def lang(self): return self.data['lang'] if self.data.has_key('lang') else 'de'
+    def lang(self): return self.data['lang'] if 'lang' in self.data else 'de'
 
     def search(self, **kwargs):
 
         self._data.update(**kwargs)
 
-        if self.data.has_key('tvdb_series'):
+        if 'tvdb_series' in self.data:
 
             show = self._tvdb.get_series(self.data['tvdb_series'], self.lang)
             if show:
                 self.data['show'] = show.SeriesName
 
-            if self.data.has_key('tvdb_episode'):
+            if 'tvdb_episode' in self.data:
                 episode = self._tvdb.get_episode('de', episodeid=self.data['tvdb_episode'])
                 if episode:
                     self.data['episode'] = episode.EpisodeName
@@ -110,8 +113,8 @@ class TvDbScraper():
             similar = []
             matches = []
 
-            subtitle = self.data['episode'] if self.data.has_key('episode') and self.data['episode'] else self.data['subtitle']
-            title = self.data['show'] if self.data.has_key('show') and self.data['show'] else self.data['title']
+            subtitle = self.data['episode'] if 'episode' in self.data and self.data['episode'] else self.data['subtitle']
+            title = self.data['show'] if 'show' in self.data and self.data['show'] else self.data['title']
 
             # search = "%s %s" % (title, subtitle)
             # result = self._tvdb.search("%s %s" % (title, subtitle), self.lang)
@@ -156,11 +159,11 @@ class BingAPI():
         # azure data market account key
         self._key = 'XVXp5LAxtPxNAt36DavCzWtbHKX8I1sseAUK2om1Diw='
         self._data = data
-        if not self._data.has_key('scraper'): self._data['scraper'] = {}
+        if 'scraper' not in self._data: self._data['scraper'] = {}
 
     def _request_url(self, query, **kwargs):
 
-        if kwargs.has_key('site'): query = "site:{} {}".format(kwargs['site'], query)
+        if 'site' in kwargs: query = "site:{} {}".format(kwargs['site'], query)
 
         params = OrderedDict([
             ('Query', "'{}'".format(query)),
@@ -176,7 +179,7 @@ class BingAPI():
         postfix = ''
         url = self._request_url(query, **kwargs)
         scraper = {'query': query, 'result': []}
-        if kwargs.has_key('site'):
+        if 'site' in kwargs:
             scraper['site'] = kwargs['site']
             postfix = " (%s)" % kwargs['site']
         found = 0
@@ -210,7 +213,7 @@ class GoogleCSE(object):
         self._search_engine_id = '018128605702257391833:boy8mbur1jk'
         self._api_key = 'AIzaSyB4CUdOTi6xdyi8twd40588-cAEY7lb0B8'
         self._data = data
-        if not self._data.has_key('scraper'): self._data['scraper'] = {}
+        if 'scraper' not in self._data: self._data['scraper'] = {}
 
     def _url(self, query, **kwargs):
 
@@ -243,7 +246,7 @@ class GoogleCSE(object):
             scraper['response'] = response.status_code
             content = json.loads(response.content)
             if response.status_code == 200:
-                if content.has_key('items'):
+                if 'items' in content:
                     results = content['items']
                     # print json.dumps(results, indent=4, ensure_ascii=False, encoding='utf-8')
                     for entry in results:
@@ -366,6 +369,7 @@ class LogFileHandler(logging.FileHandler):
 
 def main():
 
+    # from six.moves.configparser import ConfigParser
     from ConfigParser import ConfigParser
     from argparse import ArgumentParser
 
@@ -430,8 +434,8 @@ def main():
 
     # precedence: defaults > config file > environment > command line
 
-    for key in opts.keys():
-        if options.has_key(key) and opts[key] is not None:
+    for key in opts:
+        if key in options and opts[key] is not None:
             options[key] = opts[key]
         else:
             options.setdefault(key, opts[key])
@@ -456,7 +460,7 @@ def main():
 
     result = TvScraper(data, options).search()
 
-    print json.dumps(result, indent=4, ensure_ascii=False, encoding='utf-8')
+    print(json.dumps(result, indent=4, ensure_ascii=False, encoding='utf-8'))
 
 if __name__ == '__main__': main()
 
