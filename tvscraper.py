@@ -321,13 +321,10 @@ class TvScraper:
     http://thetvdb.com/?tab=seasonall&id=126301&lid=14
     '''
 
-    def _check_scraper_result(self, scraper):
+    def _check_scraper_result(self, scraper, tvdb=True):
 
         scraper = self.data['scraper'][scraper]
-
-        scraper['index'] = None; scraper['ranking'] = 0
-
-        index = 0
+        scraper['index'] = -1; scraper['ranking'] = 0; index = 0
 
         for result in scraper['result']:
 
@@ -340,8 +337,9 @@ class TvScraper:
                     self.data['tvdb_season'] = match.group(2)
                     self.data['tvdb_episode'] = match.group(3)
                     scraper['index'] = index; scraper['ranking'] = 3
-                    return TvDbScraper(self.data).search()
-                    # return True
+                    if tvdb:
+                        return TvDbScraper(self.data).search()
+                    return True
                 else:
                     match = re.match('.*thetvdb.com/\?tab=season&seriesid=(\d+)&seasonid=(\d+)',link)
                     if match:
@@ -359,7 +357,9 @@ class TvScraper:
                 if match:
                     self.data['imdb_tt'] = match.group(1)
                     scraper['index'] = index; scraper['ranking'] = 3
-                    return IMDbScraper(self.data).search()
+                    if tvdb:
+                        return IMDbScraper(self.data).search()
+                    return True
 
             index += 1
 
@@ -374,21 +374,21 @@ class TvScraper:
             query = self.tvQuery
 
             for site in ['thetvdb.com', 'imdb.com']:
-                key = "BingAPI ({})".format(site)
+                key = "BingAPI ({})".format(site); tvdb = False
                 if not self._scraped(key, query):
-                    BingAPI(self.data).search(query, site=site)
-                if self._check_scraper_result(key): return self.data
+                    BingAPI(self.data).search(query, site=site); tvdb = True
+                if self._check_scraper_result(key, tvdb): return self.data
 
-            key = 'BingAPI'
+            key = 'BingAPI' ; tvdb = False
             if not self._scraped(key, query):
-                BingAPI(self.data).search(query)
-            if self._check_scraper_result(key): return self.data
+                BingAPI(self.data).search(query); tvdb = True
+            if self._check_scraper_result(key, tvdb): return self.data
 
             if self.google:
-                key = 'GoogleCSE'
+                key = 'GoogleCSE'; tvdb = False
                 if not self._scraped(key, query):
-                    GoogleCSE(self.data).search(query)
-                if self._check_scraper_result(key): return self.data
+                    GoogleCSE(self.data).search(query); tvdb = True
+                if self._check_scraper_result(key, tvdb): return self.data
 
             # if GoogleHTTP(self.data).search(query):
             #    if self._check_scraper_result('GoogleHTTP'): return self.data

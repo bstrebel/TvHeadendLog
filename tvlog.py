@@ -51,7 +51,6 @@ class LogEntry():
         #
         # if 'type' not in self._data['tvlog']: self._data['tvlog']['type'] = 'tv'
 
-
     def out(self, fmt):
         return eval(fmt).encode('utf-8')
 
@@ -99,6 +98,8 @@ class LogEntry():
         from tvscraper import TvScraper
 
         update = dict(self.tvlog)
+        update.setdefault('type','tv')
+
         options = {'google': self.tvHeadend.google,
                    'logger': self.logger}
 
@@ -132,6 +133,13 @@ class LogEntry():
 
     @property
     def google(self): return self.tvHeadend.google
+
+    @property
+    def mirror(self): return self.tvHeadend.mirror
+
+    @property
+    def recordings(self): return self.tvHeadend.recordings
+
 
     @property
     def raw(self): return self._data
@@ -193,10 +201,10 @@ class LogEntry():
     def episode(self): return self['episode']
 
     @property
-    def show(self): return self['season']
+    def season(self): return self['season']
 
     @property
-    def show(self): return self['number']
+    def number(self): return self['number']
 
     @property
     def flags(self): return self['flags']
@@ -232,13 +240,13 @@ class LogEntry():
         if key == 'filename':
 
             if key in self.raw:
-                return self.raw[key].encode('utf-8')
+                return re.sub(self.recordings, self.mirror, self.raw[key].encode('utf-8'))
             else:
                 if 'files' in self.raw:
                     if len(self.raw['files']) > 0:
                         if key in self.raw['files'][0]:
-                            return self.raw['files'][0][key].encode('utf-8')
-            return None
+                            return re.sub(self.recordings, self.mirror, self.raw['files'][0][key].encode('utf-8'))
+            return ''
 
         elif key in ['title', 'subtitle', 'description']:
 
@@ -249,6 +257,11 @@ class LogEntry():
                 else:
                     return self.raw[key].encode('utf-8')
 
+            return ''
+
+        elif key in ['comment']:
+            if key in self.raw:
+                if self.raw[key]: return self.raw[key]
             return ''
 
         elif key == 'status': return self._status()
@@ -291,7 +304,7 @@ class LogEntry():
                             self.raw['files'][0][key] = value
                 else:
                     self.raw.setdefault('files', [])
-                    self.raw['files'][0][key] = value
+                    self.raw['files'].append({key: value})
 
         elif key in ['title', 'subtitle', 'description']:
 
@@ -393,6 +406,8 @@ class LogData(Data):
                 uuid = file
                 with codecs.open(file, mode='r', encoding='utf-8') as log:
                     self._data[uuid] = json.load(log, encoding='utf-8')
+                    #self._data[uuid] = LogEntry(json.load(log, encoding='utf-8'))
+                    #self._data[uuid]['tvlog']['status'] = self._data[uuid].status
                     log.close()
                     # self._data[uuid]['uuid'] = uuid
             os.chdir(cwd)
@@ -522,6 +537,9 @@ class TvHeadend():
 
     @property
     def recordings(self): return self.options.get('recordings')
+
+    @property
+    def mirror(self): return self.options.get('mirror', self.recordings)
 
     @property
     def tvlog(self): return self.options.get('tvlog')
@@ -701,10 +719,13 @@ class TvHeadend():
         counter = {} ; out = {}
         for k in self.data.filter():
 
-            if self.data[k].status not in counter:
-                counter[self.data[k].status] = 1
+            status = self.data[k].status
+            self.data[k]['status'] = status
+
+            if status not in counter:
+                counter[status] = 1
             else:
-                counter[self.data[k].status] += 1
+                counter[status] += 1
 
             if self.theFormat == 'JSON':
                 # print self.data.merge(k).out(self.format)
@@ -754,6 +775,7 @@ def main():
         'config':       None,
         'google':       False,
         'recordings':   '/storage/recordings',
+        'mirror':       '/storage/recordings',
         'loglevel':     'INFO',
         'out':          '"{} {} {:8} {}".format(.date, .begin, .status, .info)',
         'filter':       'True',
@@ -765,10 +787,11 @@ def main():
 
     # command line arguments
     parser = ArgumentParser(description='TVheadend Toolbox Rev. 0.1 (c) Bernd Strebel')
+    parser.add_argument('--tvheadend', type=str, help='tvheadend log directory')
+    parser.add_argument('--recordings', type=str, help='recording directory')
+    parser.add_argument('--mirror', type=str, help='recordings mirror directory')
     parser.add_argument('-c', '--config', type=str, help='alternate configuration file')
     parser.add_argument('-v', '--verbose', action='count', help='increasy verbosity')
-    parser.add_argument('-r', '--recordings', type=str, help='recording directory')
-    parser.add_argument('-t', '--tvheadend', type=str, help='tvheadend log directory')
     parser.add_argument('-s', '--source', type=str, help='data source')
     parser.add_argument('-u', '--update', type=str, help='target directory')
     parser.add_argument('-m', '--merge', type=str, help='merge csv file')
@@ -818,7 +841,7 @@ def main():
     logger = logging.getLogger('tvscraper')
 
     # precedence: defaults > config file > environment > command line
-    for key in ['recordings', 'tvheadend']:
+    for key in ['recordings', 'tvheadend', 'mirror']:
         options[key] = config.get('tvlog', key)
         options[key] = os.getenv(key.upper(), options[key])
 
@@ -829,6 +852,8 @@ def main():
             options.setdefault(key, opts[key])
 
     options['tvheadend'] = os.path.expanduser(options['tvheadend'])
+    options['recordings'] = os.path.expanduser(options['recordings'])
+    options['mirror'] = os.path.expanduser(options['mirror'])
     options['tvlog'] = options['tvheadend'] + '/dvr/log'
     options['tvcsv'] = options['tvheadend'] + '/dvr/log.csv'
 
