@@ -1,7 +1,8 @@
-from __future__ import absolute_import
-from __future__ import print_function
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
+from __future__ import absolute_import
+from __future__ import print_function
 
 import os, sys, logging, logging.config, json, re, urllib, urlparse, requests, pprint
 from collections import OrderedDict
@@ -240,7 +241,6 @@ class GoogleCSE(object):
         scraper = {'query': query, 'url': url, 'result': []}; found = 0
 
         response = requests.get(url)
-        scraper['response'] = "{} [{}]".format(response.status_code, response.text)
 
         if response:
             scraper['response'] = response.status_code
@@ -275,6 +275,9 @@ class TvScraper:
     def data(self): return self._data
 
     @property
+    def scraper(self): return self.data.get('scraper', {})
+
+    @property
     def options(self): return self._options
 
     @property
@@ -289,6 +292,27 @@ class TvScraper:
     @property
     def query(self): return self.data.get('query', None)
 
+    @property
+    def tvQuery(self):
+
+        query = ''
+        if not self.query:
+            if self.data.get('show'):
+                query = self.data['show']
+                if self.data.get('episode'):
+                    query = query + ' ' + self.data['episode']
+            else:
+                if self.data.get('title'):
+                    query = self.data['title']
+                    if self.data.get('subtitle'):
+                        query = query + ' ' + self.data['subtitle']
+            return query
+        else:
+            return self.query
+
+    def _scraped(self, key, query):
+        return key in self.scraper and self.scraper[key].get('query') == query
+
     '''
     http://www.imdb.com/title/tt1172564/
 
@@ -301,6 +325,10 @@ class TvScraper:
 
         scraper = self.data['scraper'][scraper]
 
+        scraper['index'] = None; scraper['ranking'] = 0
+
+        index = 0
+
         for result in scraper['result']:
 
             link = result['link']
@@ -311,6 +339,7 @@ class TvScraper:
                     self.data['tvdb_series'] = match.group(1)
                     self.data['tvdb_season'] = match.group(2)
                     self.data['tvdb_episode'] = match.group(3)
+                    scraper['index'] = index; scraper['ranking'] = 3
                     return TvDbScraper(self.data).search()
                     # return True
                 else:
@@ -318,18 +347,21 @@ class TvScraper:
                     if match:
                         self.data['tvdb_series'] = match.group(1)
                         self.data['tvdb_season'] = match.group(2)
+                        scraper['index'] = index; scraper['ranking'] = 2
                     else:
                         match = re.match('.*thetvdb\.com/\?tab=seasonall&id=(\d+)',link)
                         if match:
+                            scraper['index'] = index; scraper['ranking'] = 1
                             self.data['tvdb_series'] = match.group(1)
 
             elif re.match('.*imdb.com/title', link):
                 match = re.match('.*imdb.com/title/tt(\d+)',link)
                 if match:
                     self.data['imdb_tt'] = match.group(1)
+                    scraper['index'] = index; scraper['ranking'] = 3
                     return IMDbScraper(self.data).search()
-            else:
-                continue
+
+            index += 1
 
         return False
 
@@ -337,24 +369,26 @@ class TvScraper:
 
         self.data.update(**kwargs)
 
-        if self.query:
-            query = self.query
-        else:
-            query = "{} {}" .format(self.data['title'], self.data['subtitle'])
-
         if self.isTv:
 
-            for site in ['thetvdb.com', 'imdb.com']:
-                if BingAPI(self.data).search(query, site=site):
-                    if self._check_scraper_result("BingAPI (%s)" % site): return self.data
+            query = self.tvQuery
 
-            if BingAPI(self.data).search(query):
-                if self._check_scraper_result('BingAPI'): return self.data
+            for site in ['thetvdb.com', 'imdb.com']:
+                key = "BingAPI ({})".format(site)
+                if not self._scraped(key, query):
+                    BingAPI(self.data).search(query, site=site)
+                if self._check_scraper_result(key): return self.data
+
+            key = 'BingAPI'
+            if not self._scraped(key, query):
+                BingAPI(self.data).search(query)
+            if self._check_scraper_result(key): return self.data
 
             if self.google:
-
-                if GoogleCSE(self.data).search(query):
-                    if self._check_scraper_result('GoogleCSE'): return self.data
+                key = 'GoogleCSE'
+                if not self._scraped(key, query):
+                    GoogleCSE(self.data).search(query)
+                if self._check_scraper_result(key): return self.data
 
             # if GoogleHTTP(self.data).search(query):
             #    if self._check_scraper_result('GoogleHTTP'): return self.data
