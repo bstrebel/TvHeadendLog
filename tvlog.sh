@@ -2,12 +2,16 @@
 
 # DEBUG=true
 
-PROG=$(basename $0)
+PROGPATH="$0"
+PROG=$(basename "$0")
 HOSTNAME=$(hostname)
 
 [ "$DEBUG" ] && set -x
 
 TVHEADEND=${TVHEADEND:-"$HOME/.hts/tvheadend"}
+RECORDINGS=${RECORDINGS:-"/storage/recordings"}
+BACKUP=${RECORDINGS:-"/storage/recordings/.backup"}
+
 [ -d "${TVHEADEND}" ] || exit
 [ -L "${TVHEADEND}/.recordings" ] && RECORDINGS=$(readlink -f "${TVHEADEND}/.recordings")
 [ -L "${TVHEADEND}/.backup" ] && BACKUP=$(readlink -f "${TVHEADEND}/.backup")
@@ -73,6 +77,31 @@ STAMP="$(date '+%Y-%m-%d_%H%M%S')"
 
 case "$1" in
 
+	--remote)	shift
+				REMOTE=$1
+				mirror=$(ssh $REMOTE $PROG --mirror)
+				backup=$(ssh $REMOTE $PROG --backup)
+				scp ${REMOTE}:$mirror .
+				scp ${REMOTE}:$backup .
+
+				[ -f "${TVHEADEND}/.MIRROR" ] && {
+
+					$PROGPATH --backup
+					rm -r ${TVHEADEND}/dvr/log
+					tar xzf $(basename $backup) -C ${TVHEADEND}/dvr/
+				}
+
+				[ -f "${RECORDINGS}/.MIRROR" ] && {
+
+					$PROGPATH --mirror
+					rm -r ${RECORDINGS}/*
+					tar xzf $(basename $mirror) -C ${RECORDINGS}/
+				}
+
+				exit 0
+				;;
+
+
 	--mirror)	shift
 				cd "$RECORDINGS" || exit
 				target=/tmp/recordings.$$
@@ -86,7 +115,7 @@ case "$1" in
 				$TAR "${BACKUP}/recordings/recordings_$STAMP.tgz" *
 				cd "${BACKUP}" && ln -sf "recordings/recordings_$STAMP.tgz" ./recordings.tgz
 				[ "$target" ] && [ -d "$target" ] && [ "$(dirname $target)" == "/tmp" ] && rm -r $target
-				echo "Mirrorfile [${BACKUP}/recordings/recordings_$STAMP.tgz] created."
+				echo "${BACKUP}/recordings/recordings_$STAMP.tgz"
 				;;
 
 	--backup)	# snapshot of recordings (filenames only), log and csv
