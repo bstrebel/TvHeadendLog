@@ -724,15 +724,17 @@ class TvHeadend():
                 del entry.raw[token]
             else:
                 subkey = entry.raw
-                top = None
+                keys = []
                 for key in token.split('.'):
                     if key in subkey:
-                        top = key
+                        keys.append(subkey[key])
                         if isinstance(subkey[key], dict):
                             subkey = subkey[key]
                         else:
                             del subkey[key]
-                print(top)
+                            return
+
+                del keys[-2][key]
 
     def check_conflicts(self):
 
