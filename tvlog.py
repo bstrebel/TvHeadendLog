@@ -416,17 +416,23 @@ class LogData(Data):
                 self._data = json.load(log, encoding='utf-8')
                 log.close()
 
-    def write(self, path):
+    def write(self, path, replace=False):
 
         if os.path.isdir(path):
             cwd = os.getcwd()
             os.chdir(path)
             for uuid in self.raw:
-                entry = self.merge(uuid)
+
+                if replace:
+                    entry = LogEntry(self.raw[uuid])
+                else:
+                    entry = self.merge(uuid)
+
                 # print json.dumps(entry.raw, indent=4, ensure_ascii=False, encoding='utf-8')
                 with codecs.open(uuid, mode='w', encoding='utf-8') as new:
                     json.dump(entry.raw, new, indent=4, ensure_ascii=False, encoding='utf-8')
                     new.close()
+
             os.chdir(cwd)
         else:
             pass
@@ -525,6 +531,15 @@ class TvHeadend():
 
     @property
     def google(self): return self.options.get('google', False)
+
+    @property
+    def repair(self): return self.options.get('repair', False)
+
+    @property
+    def delete(self): return self.options.get('delete', None)
+
+    @property
+    def replace(self): return self.options.get('replace', False)
 
     @property
     def cwd(self): return self.options.get('cwd')
@@ -633,8 +648,8 @@ class TvHeadend():
 
         if self.options['update']:
             self._update = self.options['update'].strip('"\'')
-            self._theUpdate, self._merge = self.parse_source_spec(self._update)
-            self._data.write(self._theUpdate)
+            self._theUpdate, self._update = self.parse_source_spec(self._update)
+            self._data.write(self._theUpdate, self.replace)
 
         self.list_data()
 
@@ -650,6 +665,10 @@ class TvHeadend():
             for property in LogEntry.attributes():
                 filter = filter.replace('{' + property + '}', "LogEntry(self._data[exp])['" + property + "']")
                 filter = re.sub('(\.' + property + '\W)', r'LogEntry(self._data[exp])\1', filter)
+
+            # UTF-8 encode string literals in search expressions
+            filter = re.sub("(\'.*?\')", r"u\1.encode('utf-8')", filter)
+
 
             self._theFilter = filter
 
@@ -686,6 +705,36 @@ class TvHeadend():
             self._theFormat = fmt
 
         return fmt
+
+    def _repair(self, raw):
+
+        if 'tvlog' in raw:
+            tvlog = raw['tvlog']
+            if 'comment' in tvlog:
+                del tvlog['comment']
+
+        if 'comment' in raw:
+            if raw['comment'] is None:
+                raw['comment'] = ''
+
+    def _delete(self, entry):
+
+        print(entry)
+
+        # data = self._data[k]
+        #
+        # for token in self.delete.split(','):
+        #     if token in data:
+        #         del data[token]
+        #     else:
+        #         subkey = data
+        #         for key in token.split('.'):
+        #             if key in subkey:
+        #                 if isinstance(subkey[key], dict):
+        #                     subkey = subkey[key]
+        #                 else:
+        #                     del subkey[key]
+
 
     def check_conflicts(self):
 
@@ -726,6 +775,9 @@ class TvHeadend():
                 counter[status] = 1
             else:
                 counter[status] += 1
+
+            if self.delete: self._delete(self.data[k])
+            if self.repair: self._repair(self.data[k].raw)
 
             if self.theFormat == 'JSON':
                 # print self.data.merge(k).out(self.format)
@@ -781,7 +833,10 @@ def main():
         'filter':       'True',
         'source':       'tvlog',
         'merge':        None,
+        'delete':       None,
         'update':       None,
+        'repair':       False,
+        'replace':      False,
         'cwd': os.getcwd()
     }
 
@@ -790,6 +845,9 @@ def main():
     parser.add_argument('--tvheadend', type=str, help='tvheadend log directory')
     parser.add_argument('--recordings', type=str, help='recording directory')
     parser.add_argument('--mirror', type=str, help='recordings mirror directory')
+    parser.add_argument('--repair', action='store_true', help='repair')
+    parser.add_argument('--replace', action='store_true', help='replace')
+    parser.add_argument('--delete', type=str, help='delete attributes')
     parser.add_argument('-c', '--config', type=str, help='alternate configuration file')
     parser.add_argument('-v', '--verbose', action='count', help='increasy verbosity')
     parser.add_argument('-s', '--source', type=str, help='data source')
@@ -824,7 +882,7 @@ def main():
     if not options['config']:
         script, ext = os.path.splitext(os.path.basename(sys.argv[0]))
         config = script + ".cfg"
-        for path in ['./', HOME + '/.', '/etc/' ]:
+        for path in ['./', HOME + '/.', '/etc/']:
             if os.path.isfile(path + config):
                 options['config'] = path + config
                 break

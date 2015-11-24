@@ -323,7 +323,7 @@ class TvScraper:
 
     def _check_scraper_result(self, scraper, tvdb=True):
 
-        scraper = self.data['scraper'][scraper]
+        scraper = self.data['scraper'].get(scraper, {'result': []})
         scraper['index'] = -1; scraper['ranking'] = 0; index = 0
 
         for result in scraper['result']:
