@@ -719,22 +719,20 @@ class TvHeadend():
 
     def _delete(self, entry):
 
-        print(entry)
-
-        # data = self._data[k]
-        #
-        # for token in self.delete.split(','):
-        #     if token in data:
-        #         del data[token]
-        #     else:
-        #         subkey = data
-        #         for key in token.split('.'):
-        #             if key in subkey:
-        #                 if isinstance(subkey[key], dict):
-        #                     subkey = subkey[key]
-        #                 else:
-        #                     del subkey[key]
-
+        for token in self.delete.split(','):
+            if token in entry.raw:
+                del entry.raw[token]
+            else:
+                subkey = entry.raw
+                top = None
+                for key in token.split('.'):
+                    if key in subkey:
+                        top = key
+                        if isinstance(subkey[key], dict):
+                            subkey = subkey[key]
+                        else:
+                            del subkey[key]
+                print(top)
 
     def check_conflicts(self):
 
