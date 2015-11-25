@@ -281,6 +281,8 @@ class LogEntry():
 
         elif key == 'type': return self['tvlog'].get('type', 'tv')
 
+        elif key in ['show', 'episode']: return self['tvlog'].get(key, '')
+
         else:
             if key in self.tvlog:
                 return self.tvlog[key]
@@ -408,7 +410,8 @@ class LogData(Data):
                     #self._data[uuid] = LogEntry(json.load(log, encoding='utf-8'))
                     #self._data[uuid]['tvlog']['status'] = self._data[uuid].status
                     log.close()
-                    # self._data[uuid]['uuid'] = uuid
+                    self._data[uuid].setdefault('tvlog', {})
+                    self._data[uuid]['tvlog']['uuid'] = uuid
             os.chdir(cwd)
         else:
             with codecs.open(path, mode='r', encoding='utf-8') as log:
@@ -716,15 +719,17 @@ class TvHeadend():
 
             if 'tvlog' in entry.raw:
                 tvlog = entry.raw['tvlog']
+
+                # remove comment from tvlog
                 if 'comment' in tvlog:
                     del tvlog['comment']
 
+                # move query => tvlog['query']
                 if 'query' not in tvlog:
-
                     if 'scraper' in tvlog:
                         scraper = tvlog['scraper']
                         if 'query' not in scraper:
-                            tvlog['query'] = ''
+                            tvlog['query'] = u''
                             for key in scraper:
                                 if isinstance(scraper[key], dict):
                                     if 'query' in scraper[key]:
@@ -735,9 +740,15 @@ class TvHeadend():
                             tvlog['query'] = scraper['query']
                             del scraper['query']
 
+                # # remove fake show|episode from tvlog
+                # if int(tvlog.get('number', 0)) == 0:
+                #     tvlog['show'] = u''
+                #     tvlog['episode'] = u''
+
+            # set comment to empty string
             if 'comment' in entry.raw:
                 if entry.raw['comment'] is None:
-                    entry.raw['comment'] = ''
+                    entry.raw['comment'] = u''
 
     def _delete(self):
 
