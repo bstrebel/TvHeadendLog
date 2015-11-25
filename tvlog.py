@@ -123,7 +123,7 @@ class LogEntry():
                 self.tvlog[key] = update[key]
 
     @property
-    def tvHeadend(self): return LogEntry.tvHeadend
+    def tvHeadend(self): return LogEntry.tvHeadendl
 
     @property
     def ppLog(self, obj): return LogEntry.tvHeadend.ppLog(obj)
@@ -139,7 +139,6 @@ class LogEntry():
 
     @property
     def recordings(self): return self.tvHeadend.recordings
-
 
     @property
     def raw(self): return self._data
@@ -627,6 +626,9 @@ class TvHeadend():
         self._theSource, self._data = self.parse_source_spec(self._source)
         self._data.read(self._theSource)
 
+        if self.repair: self._repair()
+        if self.delete: self._delete()
+
         if self.options['merge']:
             self._merge = self.options['merge'].strip('"\'')
             self._theMerge, self._merge = self.parse_source_spec(self._merge)
@@ -706,35 +708,59 @@ class TvHeadend():
 
         return fmt
 
-    def _repair(self, raw):
+    def _repair(self):
 
-        if 'tvlog' in raw:
-            tvlog = raw['tvlog']
-            if 'comment' in tvlog:
-                del tvlog['comment']
+        for k in self.data.filter():
 
-        if 'comment' in raw:
-            if raw['comment'] is None:
-                raw['comment'] = ''
+            entry = self.data[k]
 
-    def _delete(self, entry):
+            if 'tvlog' in entry.raw:
+                tvlog = entry.raw['tvlog']
+                if 'comment' in tvlog:
+                    del tvlog['comment']
 
-        for token in self.delete.split(','):
-            if token in entry.raw:
-                del entry.raw[token]
-            else:
-                subkey = entry.raw
-                keys = []
-                for key in token.split('.'):
-                    if key in subkey:
-                        keys.append(subkey[key])
-                        if isinstance(subkey[key], dict):
-                            subkey = subkey[key]
+                if 'query' not in tvlog:
+
+                    if 'scraper' in tvlog:
+                        scraper = tvlog['scraper']
+                        if 'query' not in scraper:
+                            tvlog['query'] = ''
+                            for key in scraper:
+                                if isinstance(scraper[key], dict):
+                                    if 'query' in scraper[key]:
+                                        if not tvlog['query']:
+                                            tvlog['query'] = scraper[key]['query']
+                                        del scraper[key]['query']
                         else:
-                            del subkey[key]
-                            return
+                            tvlog['query'] = scraper['query']
+                            del scraper['query']
 
-                del keys[-2][key]
+            if 'comment' in entry.raw:
+                if entry.raw['comment'] is None:
+                    entry.raw['comment'] = ''
+
+    def _delete(self):
+
+        for k in self.data.filter():
+
+            entry = self.data[k]
+
+            for token in self.delete.split(','):
+                if token in entry.raw:
+                    del entry.raw[token]
+                else:
+                    subkey = entry.raw
+                    keys = []
+                    for key in token.split('.'):
+                        if key in subkey:
+                            keys.append(subkey[key])
+                            if isinstance(subkey[key], dict):
+                                subkey = subkey[key]
+                            else:
+                                del subkey[key]
+                                break
+
+                    del keys[-2][key]
 
     def check_conflicts(self):
 
@@ -758,7 +784,7 @@ class TvHeadend():
 
     def list_data(self, reload=False):
 
-        sys.stderr.write("\nSource:\t{0}\nFilter:\t{1}\nFormat:\t{2}\n\n". format(self.theSource, self.theFilter, self.theFormat))
+        sys.stderr.write("\nSource:\t{}\nFiles:\t{}\nMirror:\t{}\nFilter:\t{}\nFormat:\t{}\n\n". format(self.theSource, self.recordings, self.mirror, self.theFilter, self.theFormat))
 
         if self.theFormat == 'CSV' and not self.noheader:
             print(CsvData.header())
@@ -775,9 +801,6 @@ class TvHeadend():
                 counter[status] = 1
             else:
                 counter[status] += 1
-
-            if self.delete: self._delete(self.data[k])
-            if self.repair: self._repair(self.data[k].raw)
 
             if self.theFormat == 'JSON':
                 # print self.data.merge(k).out(self.format)

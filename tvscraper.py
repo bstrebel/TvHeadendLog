@@ -275,7 +275,10 @@ class TvScraper:
     def data(self): return self._data
 
     @property
-    def scraper(self): return self.data.get('scraper', {})
+    def scraper(self): return self._data.get('scraper', {})
+
+    # @scraper.setter
+    # def scraper(self, value): self.data['scraper'] = value
 
     @property
     def options(self): return self._options
@@ -290,28 +293,28 @@ class TvScraper:
     def isTv(self): return self.data['type'] == 'tv'
 
     @property
-    def query(self): return self.data.get('query', None)
+    def query(self): return self._data.get('query', None)
+
+    # @query.setter
+    # def query(self, value): self.data['query'] = value
 
     @property
     def tvQuery(self):
 
         query = ''
-        if not self.query:
-            if self.data.get('show'):
-                query = self.data['show']
-                if self.data.get('episode'):
-                    query = query + ' ' + self.data['episode']
-            else:
-                if self.data.get('title'):
-                    query = self.data['title']
-                    if self.data.get('subtitle'):
-                        query = query + ' ' + self.data['subtitle']
-            return query
+        if self.data.get('show'):
+            query = self.data['show']
+            if self.data.get('episode'):
+                query = query + ' ' + self.data['episode']
         else:
-            return self.query
+            if self.data.get('title'):
+                query = self.data['title']
+                if self.data.get('subtitle'):
+                    query = query + ' ' + self.data['subtitle']
+        return query
 
     def _scraped(self, key, query):
-        return key in self.scraper and self.scraper[key].get('query') == query
+        return key in self.scraper and self.data.get('query') == query
 
     '''
     http://www.imdb.com/title/tt1172564/
@@ -372,21 +375,30 @@ class TvScraper:
         if self.isTv:
 
             query = self.tvQuery
+            search = True
+
+            if 'query' in self.data:
+
+                if self.query == query:
+                    search = False
+                else:
+                    self._data['query'] = query
+                    self._data['scraper'] = {}
 
             for site in ['thetvdb.com', 'imdb.com']:
                 key = "BingAPI ({})".format(site); tvdb = False
-                if not self._scraped(key, query):
+                if search:
                     BingAPI(self.data).search(query, site=site); tvdb = True
                 if self._check_scraper_result(key, tvdb): return self.data
 
             key = 'BingAPI' ; tvdb = False
-            if not self._scraped(key, query):
+            if search:
                 BingAPI(self.data).search(query); tvdb = True
             if self._check_scraper_result(key, tvdb): return self.data
 
             if self.google:
                 key = 'GoogleCSE'; tvdb = False
-                if not self._scraped(key, query):
+                if search:
                     GoogleCSE(self.data).search(query); tvdb = True
                 if self._check_scraper_result(key, tvdb): return self.data
 
