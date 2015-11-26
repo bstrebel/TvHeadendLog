@@ -757,6 +757,7 @@ class TvHeadend():
             entry = self.data[k]
 
             for token in self.delete.split(','):
+                token = token.strip('.')
                 if token in entry.raw:
                     del entry.raw[token]
                 else:
