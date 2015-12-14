@@ -76,13 +76,13 @@ class IMDbScraper():
 
 class TvDbScraper():
 
-    def __init__(self, data=None):
+    def __init__(self, key, data=None):
 
         from pytvdbapi import api     # pip package
         from fuzzywuzzy import fuzz   # pip package: requires python-levenshtein!
 
         self._data = data if data else {}
-        self._tvdb = api.TVDB('4F36CC91D7116666')
+        self._tvdb = api.TVDB(key)
         # Scraper.__init__(self, data)
 
     @property
@@ -157,9 +157,9 @@ class TvDbScraper():
 
 class BingAPI():
 
-    def __init__(self, data):
+    def __init__(self, key, data):
         # azure data market account key
-        self._key = 'XVXp5LAxtPxNAt36DavCzWtbHKX8I1sseAUK2om1Diw='
+        self._key = key
         self._data = data
         if 'scraper' not in self._data: self._data['scraper'] = {}
 
@@ -210,10 +210,10 @@ class BingAPI():
 
 class GoogleCSE(object):
 
-    def __init__(self, data):
+    def __init__(self, cse, key, data):
 
-        self._search_engine_id = '018128605702257391833:boy8mbur1jk'
-        self._api_key = 'AIzaSyB4CUdOTi6xdyi8twd40588-cAEY7lb0B8'
+        self._search_engine_id = cse
+        self._api_key = key
         self._data = data
         if 'scraper' not in self._data: self._data['scraper'] = {}
 
@@ -294,6 +294,18 @@ class TvScraper:
     def isTv(self): return self.data['type'] == 'tv'
 
     @property
+    def google_cse(self): return self.options['google_cse']
+
+    @property
+    def google_cse_key(self): return self.options['google_cse']
+
+    @property
+    def bing_api_key(self): return self.options['google_cse']
+
+    @property
+    def thetvdb_api_key(self): return self.options['google_cse']
+
+    @property
     def query(self): return self._data.get('query', None)
 
     # @query.setter
@@ -342,7 +354,7 @@ class TvScraper:
                     self.data['tvdb_episode'] = match.group(3)
                     scraper['index'] = index; scraper['ranking'] = 3
                     if tvdb:
-                        return TvDbScraper(self.data).search()
+                        return TvDbScraper(self.thetvdb_api_key, self.data).search()
                     return True
                 else:
                     match = re.match('.*thetvdb.com/\?tab=season&seriesid=(\d+)&seasonid=(\d+)',link)
@@ -389,18 +401,18 @@ class TvScraper:
             for site in ['thetvdb.com', 'imdb.com']:
                 key = "BingAPI ({})".format(site); tvdb = False
                 if search:
-                    BingAPI(self.data).search(query, site=site); tvdb = True
+                    BingAPI(self.bing_api_key, self.data).search(query, site=site); tvdb = True
                 if self._check_scraper_result(key, tvdb): return self.data
 
             key = 'BingAPI' ; tvdb = False
             if search:
-                BingAPI(self.data).search(query); tvdb = True
+                BingAPI(self.bing_api_key, self.data).search(query); tvdb = True
             if self._check_scraper_result(key, tvdb): return self.data
 
             if self.google:
                 key = 'GoogleCSE'; tvdb = False
                 if search:
-                    GoogleCSE(self.data).search(query); tvdb = True
+                    GoogleCSE(self.google_cse, self.google_cse_key, self.data).search(query); tvdb = True
                 if self._check_scraper_result(key, tvdb): return self.data
 
             # if GoogleHTTP(self.data).search(query):
@@ -428,11 +440,15 @@ def main():
 
     options = {
 
-        'home':         HOME,
-        'config':       None,
-        'loglevel':     'INFO',
-        'type':         'tv',
-        'cwd':          CWD
+        'home':             HOME,
+        'config':           None,
+        'loglevel':         'INFO',
+        'type':             'tv',
+        'google_cse':       None,
+        'google_cse_key':   None,
+        'bing_api_key':     None,
+        'thetvdb_api_key':  None,
+        'cwd':              CWD
     }
 
     # command line arguments
@@ -480,7 +496,9 @@ def main():
     logger = logging.getLogger('tvscraper')
 
     # precedence: defaults > config file > environment > command line
-
+    for key in ['google_cse', 'google_cse_key', 'bing_api_key', 'thetvdb_api_key']:
+        options[key] = config.get('tvscraper', key)
+        options[key] = os.getenv(key.upper(), options[key])
     for key in opts:
         if key in options and opts[key] is not None:
             options[key] = opts[key]
